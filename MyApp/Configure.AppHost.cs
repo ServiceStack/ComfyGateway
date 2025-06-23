@@ -1,16 +1,20 @@
+using System.Data;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MyApp.ServiceInterface;
+using MyApp.ServiceModel;
 using ServiceStack.Configuration;
 using ServiceStack.Data;
 using ServiceStack.IO;
-using ServiceStack.NativeTypes.Python;
+using ServiceStack.NativeTypes.CSharp;
+using ServiceStack.OrmLite;
 using ServiceStack.Text;
+using ServiceStack.Web;
 
 [assembly: HostingStartup(typeof(MyApp.AppHost))]
 
 namespace MyApp;
 
-public class AppHost() : AppHostBase("MyApp"), IHostingStartup
+public partial class AppHost() : AppHostBase("MyApp"), IHostingStartup
 {
     public void Configure(IWebHostBuilder builder) => builder
         .ConfigureServices((context,services) => {
@@ -19,18 +23,33 @@ public class AppHost() : AppHostBase("MyApp"), IHostingStartup
             var appConfig = AppConfig.Instance;
             services.AddSingleton(appConfig);
 
-            var artifactsPath = Environment.GetEnvironmentVariable("ARTIFACTS_PATH");
-            if (artifactsPath != null)
-                appConfig.ArtifactsPath = artifactsPath;
+            appConfig.DefaultConnection = Environment.GetEnvironmentVariable("COMFY_DB_CONNECTION") 
+                ?? context.Configuration.GetConnectionString("DefaultConnection");
+            appConfig.TaskConnection = context.Configuration.GetConnectionString("TaskConnection");
+
+            var artifactsPath = Environment.GetEnvironmentVariable("COMFY_GATEWAY_ARTIFACTS");
+            appConfig.ArtifactsPath = artifactsPath ?? appConfig.ArtifactsPath;
+            var filesPath = Environment.GetEnvironmentVariable("AI_FILES_PATH");
+            if (filesPath != null)
+                appConfig.FilesPath = filesPath;
+            var assetsBaseUrl = Environment.GetEnvironmentVariable("ASSETS_BASE_URL");
+            if (assetsBaseUrl != null)
+                appConfig.AssetsBaseUrl = assetsBaseUrl;
 
             services.AddSingleton<AppData>();
             services.AddSingleton(ComfyMetadata.Instance);
             services.AddSingleton<ComfyGateway>();
+            services.AddSingleton<AgentEventsManager>();
             
             // Optional: Enable Managed File Uploads: https://docs.servicestack.net/locode/files-overview
             var fileFs = new FileSystemVirtualFiles(context.HostingEnvironment.ContentRootPath);
             services.AddPlugin(new FilesUploadFeature(
                 // User writable, public readable
+                new UploadLocation("avatars", 
+                    fileFs,
+                    readAccessRole: RoleNames.AllowAnon,
+                    maxFileBytes: 10 * 1024 * 1024,
+                    resolvePath:ctx => $"avatars/{ctx.UserAuthId}/{ctx.FileName}"),
                 new UploadLocation("pub", 
                     fileFs,
                     readAccessRole: RoleNames.AllowAnon,
@@ -40,24 +59,48 @@ public class AppHost() : AppHostBase("MyApp"), IHostingStartup
                 new UploadLocation("secure", 
                     fileFs,
                     maxFileBytes: 10 * 1024 * 1024,
-                    resolvePath:ctx => $"/users/{ctx.UserAuthId}/{ctx.FileName}")
+                    resolvePath:ctx => $"users/{ctx.UserAuthId}/{ctx.FileName}")
             ));
 
-            PythonGenerator.TypeAliases[nameof(Object)] = "Any";
+            var scripts = InitOptions.ScriptContext; 
+            scripts.ScriptAssemblies.Add(typeof(Hello).Assembly);
+            scripts.ScriptMethods.Add(new ValidationScripts());
         })
         .ConfigureAppHost(afterConfigure: appHost =>
         {
             var services = appHost.GetApplicationServices();
-            AppData.Instance = services.GetRequiredService<AppData>();
-            using var db = services.GetRequiredService<IDbConnectionFactory>().OpenDbConnection();
-            AppData.Instance.Reload(db);
+            var appData = AppData.Instance = services.GetRequiredService<AppData>();
+            appHost.ServiceName = appData.Config.AppName;
+            using var db = services.GetRequiredService<IDbConnectionFactory>().Open(x => x.WithName("AppHost"));
+            appData.Reload(db);
+            var agentsManager = services.GetRequiredService<AgentEventsManager>();
+            agentsManager.Reload();
         });
 
     public override void Configure()
     {
         AppConfig.Instance.GitPagesBaseUrl ??= ResolveGitBlobBaseUrl(ContentRootDirectory);
     }
-    
+
+    public override IDbConnection GetDbConnection(IRequest? req = null)
+    {
+        if (req == null)
+            return base.GetDbConnection(req);
+        return base.GetDbConnection(req);
+    }
+    //
+    // public override async Task<IDbConnection> GetDbConnectionAsync(IRequest? req = null)
+    // {
+    //     if (req == null)
+    //         return await base.GetDbConnectionAsync(req);
+    //     return (await base.GetDbConnectionAsync(req)).WithName(req?.Dto?.GetType().Name ?? req?.PathInfo ?? "Unknown");
+    // }
+
+    public override void OnStartupException(Exception ex)
+    {
+        base.OnStartupException(ex);
+    }
+
     private string? ResolveGitBlobBaseUrl(IVirtualDirectory contentDir)
     {
         var srcDir = new DirectoryInfo(contentDir.RealPath);

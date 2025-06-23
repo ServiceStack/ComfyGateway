@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 
 const files = {
-    './wwwroot/data/model-list.json': 'https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/refs/heads/main/model-list.json'
+    './wwwroot/data/model-list.json': 'https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/refs/heads/main/model-list.json',
+    './wwwroot/data/custom-node-list.json': 'https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/refs/heads/main/custom-node-list.json',
+    './wwwroot/data/extension-node-map.json': 'https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/refs/heads/main/extension-node-map.json',
 }
 
 import path from 'path'
 import fs from 'fs'
-// import {pipeline} from 'stream'
-// import {promisify} from 'util'
-// import {execSync} from 'child_process'
-// const pipe = promisify(pipeline)
 
 async function fetchDownload(url, toFile, retries) {
     const toDir = path.dirname(toFile)

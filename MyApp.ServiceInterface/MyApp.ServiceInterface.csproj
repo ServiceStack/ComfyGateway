@@ -9,10 +9,12 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.*" />
         <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.*" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.*" />
         <PackageReference Include="ServiceStack" Version="8.*" />
         <PackageReference Include="ServiceStack.Ormlite" Version="8.*" />
+        <PackageReference Include="ServiceStack.Ormlite.Sqlite.Data" Version="8.*" />
         <PackageReference Include="ServiceStack.Server" Version="8.*" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="2.*" />
+        <PackageReference Include="SkiaSharp" Version="3.119.0" />
     </ItemGroup>
 
     <ItemGroup>

@@ -11,10 +11,13 @@ public class Migration1001 : MigrationBase
         [AutoIncrement] public int Id { get; set; }
         [Index]
         public string DeviceId { get; set; }
+        public int Version { get; set; }
         [Index]
         public string UserId { get; set; }
         public string? UserName { get; set; }
         public string ApiKey { get; set; }
+        public List<GpuInfo>? Gpus { get; set; }
+        public List<string> Workflows { get; set; }
         public List<string> Nodes { get; set; }
         public List<string> Checkpoints { get; set; }
         public List<string> Unets { get; set; }
@@ -32,6 +35,24 @@ public class Migration1001 : MigrationBase
         public DateTime? OfflineDate { get; set; }
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }
+        public string? LastIp { get; set; }
+    
+        public int Credits { get; set; }
+        public int WorkflowsExecuted { get; set; }
+        public int ImagesGenerated { get; set; }
+        public int AudiosGenerated { get; set; }
+        public int VideosGenerated { get; set; }
+        public int TextsGenerated { get; set; }
+    
+        public int QueueCount { get; set; }
+        public List<string>? LanguageModels { get; set; }
+    
+        [PgSqlJsonB]
+        public List<string>? RequirePip { get; set; }
+        [PgSqlJsonB]
+        public List<string>? RequireNodes { get; set; }
+        [PgSqlJsonB]
+        public List<string>? RequireModels { get; set; }
     }
     
     public class Asset
@@ -56,6 +77,8 @@ public class Migration1001 : MigrationBase
         public DateTime? ModifiedDate { get; set; }
     }
 
+    public class GpuInfo {}
+    
     public override void Up()
     {
         Db.CreateTable<ComfyAgent>();

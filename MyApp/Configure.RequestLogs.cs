@@ -1,7 +1,7 @@
 using ServiceStack.Jobs;
 using ServiceStack.Web;
 
-[assembly: HostingStartup(typeof(MyApp.ConfigureRequestLogs))]
+// [assembly: HostingStartup(typeof(MyApp.ConfigureRequestLogs))]
 
 namespace MyApp;
 
@@ -11,12 +11,22 @@ public class ConfigureRequestLogs : IHostingStartup
         .ConfigureServices((context, services) => {
             
             services.AddPlugin(new RequestLogsFeature {
-                RequestLogger = new SqliteRequestLogger(),
+                RequestLogger = new SqliteRequestLogger {
+                    DbDir = Path.Combine(context.Configuration.GetAppDataPath(), "requests")
+                },
                 // EnableResponseTracking = true,
                 EnableRequestBodyTracking = true,
                 EnableErrorTracking = true
             });
             services.AddHostedService<RequestLogsHostedService>();
+            
+            // if (context.HostingEnvironment.IsDevelopment())
+            // {
+            //     services.AddPlugin(new ProfilingFeature
+            //     {
+            //         IncludeStackTrace = true,
+            //     });
+            // }            
         });
 }
 

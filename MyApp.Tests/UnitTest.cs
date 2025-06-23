@@ -3,6 +3,7 @@ using ServiceStack;
 using ServiceStack.Testing;
 using MyApp.ServiceInterface;
 using MyApp.ServiceModel;
+using ServiceStack.Text;
 
 namespace MyApp.Tests;
 
@@ -27,5 +28,11 @@ public class UnitTest
         var response = (HelloResponse)service.Any(new Hello { Name = "World" });
 
         Assert.That(response.Result, Is.EqualTo("Hello, World!"));
+    }
+
+    [Test]
+    public void Test_PreciseTimestamp()
+    {
+        PreciseTimestamp.UniqueUtcNowTicks.Print();
     }
 }

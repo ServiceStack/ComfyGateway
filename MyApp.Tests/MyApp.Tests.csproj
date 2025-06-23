@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
-        <Nullable>enable</Nullable>
+<!--        <Nullable>enable</Nullable>-->
         <ImplicitUsings>enable</ImplicitUsings>
         <DebugType>portable</DebugType>
         <OutputType>Library</OutputType>
@@ -18,6 +18,21 @@
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
         <PackageReference Include="ServiceStack" Version="8.*" />
         <PackageReference Include="ServiceStack.Kestrel" Version="8.*" />
+        <PackageReference Include="ServiceStack.OrmLite.PostgreSQL" Version="8.*" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="workflows\**\*.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="files\**\*.*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </None>
     </ItemGroup>
 
 </Project>

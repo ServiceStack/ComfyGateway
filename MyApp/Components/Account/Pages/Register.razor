@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using MyApp.Data
+@using MyApp.ServiceInterface
 
 @inject UserManager<ApplicationUser> UserManager
 @inject IUserStore<ApplicationUser> UserStore
@@ -28,6 +29,13 @@
                 <DataAnnotationsValidator />
                 <ValidationSummary class="mb-3 text-danger text-center font-semibold" />
                 <div class="flex flex-col gap-y-4">
+                    <div>
+                        <label for="username" class="@TextInput.LabelClasses">Username</label>
+                        <div class="mt-1 relative">
+                            <InputText id="username" type="text" @bind-Value="Input.Username" class="@TextInput.InputClasses" autocomplete="username" aria-required="true" placeholder="username" />
+                        </div>
+                        <ValidationMessage For="() => Input.Username" class="mt-2 text-danger text-sm" />
+                    </div>
                     <div>
                         <label for="email" class="@TextInput.LabelClasses">Email</label>
                         <div class="mt-1 relative">
@@ -79,9 +87,11 @@
     {
         var user = CreateUser();
 
-        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
+        await UserStore.SetUserNameAsync(user, Input.Username, CancellationToken.None);
         var emailStore = GetEmailStore();
         await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
+
+        user.ProfileUrl = ImageCreator.Instance.CreateSvgDataUri(char.ToUpper(Input.Username[0]));
         var result = await UserManager.CreateAsync(user, Input.Password);
 
         if (!result.Succeeded)
@@ -136,6 +146,10 @@
 
     private sealed class InputModel
     {
+        [Required]
+        [Display(Name = "Username")]
+        public string Username { get; set; } = "";
+
         [Required]
         [EmailAddress]
         [Display(Name = "Email")]

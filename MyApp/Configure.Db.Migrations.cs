@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Data;
 using MyApp.Migrations;
+using MyApp.ServiceInterface;
 using MyApp.ServiceModel;
 using ServiceStack;
 using ServiceStack.Data;
 using ServiceStack.OrmLite;
+using ServiceStack.Text;
 
 [assembly: HostingStartup(typeof(MyApp.ConfigureDbMigrations))]
 
@@ -15,7 +17,8 @@ namespace MyApp;
 public class ConfigureDbMigrations : IHostingStartup
 {
     public void Configure(IWebHostBuilder builder) => builder
-        .ConfigureAppHost(appHost => {
+        .ConfigureAppHost(appHost =>
+        {
             var migrator = new Migrator(appHost.Resolve<IDbConnectionFactory>(), typeof(Migration1000).Assembly);
             AppTasks.Register("migrate", _ =>
             {
@@ -42,6 +45,50 @@ public class ConfigureDbMigrations : IHostingStartup
             });
             AppTasks.Register("migrate.revert", args => migrator.Revert(args[0]));
             AppTasks.Register("migrate.rerun", args => migrator.Rerun(args[0]));
+            AppTasks.Register("adhoc", args => {
+                var db = migrator.DbFactory.OpenDbConnection();
+                db.DropAndCreateTable<ArtifactReaction>();
+                db.DropAndCreateTable<ThreadReaction>();
+                db.DropAndCreateTable<CommentReaction>();
+            });
+            AppTasks.Register("metadata", args =>
+            {
+                var db = migrator.DbFactory.OpenDbConnection();
+                var artifacts = db.Select<Artifact>();
+                var ArtifactsPath = AppConfig.Instance.ArtifactsPath;
+
+                // find all *.json files in ArtifactsPath
+                var files = Directory.GetFiles(ArtifactsPath, "*.json", SearchOption.AllDirectories);
+                foreach (var filePath in files)
+                {
+                    var json = File.ReadAllText(filePath);
+                    var metadata = json.FromJson<ArtifactMetadata>();
+                    if (metadata.FileName != null)
+                    {
+                        var artifactUrl = "/artifacts".CombineWith(metadata.FileName);
+                        var matchingArtifacts = artifacts.Where(x => x.Url == artifactUrl).ToList();
+                        var artifact = matchingArtifacts.FirstOrDefault();
+                        if (artifact != null)
+                        {
+                            Console.WriteLine($"Update Artifact {artifact.Id} from {artifact.GenerationId}: {artifact.Url} ({artifact.Length})");
+                            db.UpdateOnly(() => new Artifact
+                            {
+                                Ratings = metadata.Ratings,
+                                Categories = metadata.Categories,
+                                Tags = metadata.Tags,
+                                Objects = metadata.Objects,
+                                Phash = metadata.Phash,
+                                Color = metadata.Color,
+                            }, x => x.Id == artifact.Id);
+                        }
+                    }
+                    else
+                    {
+                        metadata.PrintDump();
+                        throw new Exception($"Filename missing in {filePath}");
+                    }
+                }
+            });
             AppTasks.Run();
         });
 
@@ -83,45 +130,49 @@ public class ConfigureDbMigrations : IHostingStartup
 
         await EnsureUserAsync(new ApplicationUser
         {
-            DisplayName = "Test User",
-            Email = "test@email.com",
-            UserName = "test@email.com",
-            FirstName = "Test",
-            LastName = "User",
-            EmailConfirmed = true,
-            ProfileUrl = "/img/profiles/user1.svg",
-        }, "p@55wOrd");
-
-        await EnsureUserAsync(new ApplicationUser
-        {
-            DisplayName = "Test Employee",
-            Email = "employee@email.com",
-            UserName = "employee@email.com",
-            FirstName = "Test",
-            LastName = "Employee",
-            EmailConfirmed = true,
-            ProfileUrl = "/img/profiles/user2.svg",
-        }, "p@55wOrd", [Roles.Employee]);
-
-        await EnsureUserAsync(new ApplicationUser
-        {
-            DisplayName = "Test Manager",
-            Email = "manager@email.com",
-            UserName = "manager@email.com",
-            FirstName = "Test",
-            LastName = "Manager",
-            EmailConfirmed = true,
-            ProfileUrl = "/img/profiles/user3.svg",
-        }, "p@55wOrd", [Roles.Manager, Roles.Employee]);
-
-        await EnsureUserAsync(new ApplicationUser
-        {
+            Id = "0c9fe851-fa92-4e63-a916-c89631b77336",
             DisplayName = "Admin User",
             Email = "admin@email.com",
             UserName = "admin@email.com",
             FirstName = "Admin",
             LastName = "User",
             EmailConfirmed = true,
+            ProfileUrl = ImageCreator.Instance.CreateSvgDataUri('A'),
         }, "p@55wOrd", allRoles);
+
+        await EnsureUserAsync(new ApplicationUser
+        {
+            Id = "3DA81EB3-12FA-4012-986D-3D6B08765649",
+            DisplayName = "System User",
+            Email = "system@email.com",
+            UserName = "admin",
+            FirstName = "System",
+            LastName = "User",
+            EmailConfirmed = true,
+            ProfileUrl = ImageCreator.Instance.CreateSvgDataUri('S'),
+        }, "p@55wOrd");
+
+        await EnsureUserAsync(new ApplicationUser
+        {
+            Id = "5B3DF8CA-6AB3-4BEE-AAFC-8FB0C8DF349D",
+            DisplayName = "gateway",
+            Email = "gateway@gmail.com",
+            UserName = "gateway",
+            FirstName = "Gateway",
+            EmailConfirmed = true,
+            ProfileUrl = ImageCreator.Instance.CreateSvgDataUri('U'),
+        }, "p@55wOrd", allRoles);
+        
+        await EnsureUserAsync(new ApplicationUser
+        {
+            Id = "CE6C1409-20C9-436E-ABB5-832F15A2A863",
+            DisplayName = "Test User",
+            Email = "test@email.com",
+            UserName = "test",
+            FirstName = "Test",
+            LastName = "User",
+            EmailConfirmed = true,
+            ProfileUrl = ImageCreator.Instance.CreateSvgDataUri('T'),
+        }, "p@55wOrd");
     }
 }

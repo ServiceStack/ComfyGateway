@@ -17,14 +17,24 @@
         ["@servicestack/client"] = ("/lib/mjs/servicestack-client.mjs", "/lib/mjs/servicestack-client.min.mjs"),
         ["@servicestack/vue"] =    ("/lib/mjs/servicestack-vue.mjs",    "/lib/mjs/servicestack-vue.min.mjs"),
         ["dtos.mjs"] =             ("/mjs/dtos.mjs",                    "/mjs/dtos.mjs"),
+
+        ["vue-router"] =           ("/lib/mjs/vue-router.mjs",          "/lib/mjs/vue-router.min.mjs"),
+        // Used in dev version of vue-router
+        ["@vue/devtools-api"] =    ("https://unpkg.com/@vue/devtools-api@6.2.1/lib/esm/index.js","https://unpkg.com/@vue/devtools-api@6.2.1/lib/esm/index.js")
     })
 
     <HeadOutlet />
 </head>
 
-<body class="bg-white dark:bg-black dark:text-white">
+<body class="bg-white dark:bg-gray-800 dark:text-white min-h-screen">
     <Routes />
-    <script src="_framework/blazor.web.js"></script>
+    @* <script src="_framework/blazor.web.js"></script> *@
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script>
+      Blazor.start({
+        ssr: { disableDomPreservation: true }
+      });
+    </script>
     <script src="js/servicestack-blazor.js"></script>
     <script>JS.init({ colorScheme:false })</script>
     <script src="lib/js/lite-yt-embed.js"></script>

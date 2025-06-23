@@ -23,7 +23,14 @@ public class ConfigureBackgroundJobs : IHostingStartup
                 c.GetRequiredService<SmtpConfig>()));
             
             services.AddPlugin(new CommandsFeature());
-            services.AddPlugin(new BackgroundsJobFeature());
+            services.AddPlugin(new BackgroundsJobFeature
+            {
+                DbDir = Path.Combine(context.Configuration.GetAppDataPath(), "jobs"),
+                ConfigureDialectProvider = dialect => {
+                    dialect.BusyTimeout = TimeSpan.FromSeconds(30);
+                    dialect.EnableWriterLock = false;
+                },
+            });
             services.AddHostedService<JobsHostedService>();
         }).ConfigureAppHost(afterAppHostInit: appHost => {
             var services = appHost.GetApplicationServices();
@@ -56,7 +63,7 @@ public class JobsHostedService(ILogger<JobsHostedService> log, IBackgroundJobs j
     {
         await jobs.StartAsync(stoppingToken);
         
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(13));
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
             await jobs.TickAsync();

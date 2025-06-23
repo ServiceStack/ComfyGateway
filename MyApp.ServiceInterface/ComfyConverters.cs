@@ -1,6 +1,4 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
+using System.Runtime.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ServiceStack;
@@ -8,234 +6,146 @@ using MyApp.ServiceModel;
 
 namespace MyApp.ServiceInterface;
 
-// Custom converter to handle both string and numeric IDs
-public class NodeIdConverter : JsonConverter<string>
-{
-    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.Number)
-            return reader.GetInt32().ToString();
-        if (reader.TokenType == JsonTokenType.String)
-            return reader.GetString();
-
-        throw new JsonException($"Unexpected token type: {reader.TokenType}");
-    }
-
-    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-    {
-        // Try to parse as integer first
-        if (int.TryParse(value, out int intValue))
-        {
-            writer.WriteNumberValue(intValue);
-        }
-        else
-        {
-            writer.WriteStringValue(value);
-        }
-    }
-}
-
-// --- C# Classes reflecting the JSON structures ---
-
-// Classes for parsing the ComfyUI Workflow JSON
-public class WorkflowNodeInputDefinition
-{
-    [JsonPropertyName("link")] public int? Link { get; set; } // Link ID if connected
-    // Other properties like "name", "type" might exist but are not strictly needed for API prompt conversion
-}
-
 public class WorkflowNodeInput
 {
-    [JsonPropertyName("name")] public string? Name { get; set; }
+    [DataMember(Name = "name")] public string Name { get; set; }
+    [DataMember(Name = "type")] public string Type { get; set; }
+    [DataMember(Name = "link")] public int? Link { get; set; } // Link ID if connected
 
-    [JsonPropertyName("type")] public string? Type { get; set; }
-
-    [JsonPropertyName("link")] public int? Link { get; set; }
-}
-
-public class WorkflowNode
-{
-    private string? _id;
-
-    [JsonPropertyName("id")]
-    [JsonConverter(typeof(NodeIdConverter))]
-    public string? Id { get; set; }
-
-    [JsonPropertyName("type")] // Sometimes display name, but class_type is reliable
-    public string Type { get; set; } = ""; // Can ignore if class_type is present
-
-    [JsonPropertyName("inputs")]
-    public List<WorkflowNodeInput>? InputsArray { get; set; } // For parsing workflows with inputs as array
-
-    [JsonPropertyName("processed_inputs")]
-    public Dictionary<string, WorkflowNodeInputDefinition>? Inputs { get; set; } // For internal use
-
-    [JsonPropertyName("widgets_values")]
-    public List<JsonElement>? WidgetsValues { get; set; } // Use JsonElement to capture various types
-
-    // Other workflow node properties (pos, size, mode, etc.) are not needed for the API prompt
-
-    // Process InputsArray into Inputs dictionary
-    public void ProcessInputs()
+    public static WorkflowNodeInput Parse(object obj)
     {
-        if (InputsArray is { Count: > 0 })
+        var dict = (Dictionary<string, object>)obj;
+        var ret = new WorkflowNodeInput
         {
-            Inputs = new Dictionary<string, WorkflowNodeInputDefinition>();
-            foreach (var input in InputsArray)
-            {
-                if (input.Name != null)
-                {
-                    Inputs[input.Name] = new WorkflowNodeInputDefinition { Link = input.Link };
-                }
-            }
-        }
+            Name = dict.GetValueOrDefault("name")?.ToString() ?? throw new Exception("No name found for input"),
+            Type = dict.GetValueOrDefault("type")?.ToString() ?? throw new Exception("No type found for input"),
+            Link = dict.GetValueOrDefault("link")?.ConvertTo<int>(),
+        };
+        return ret;
+    }
+}
+public class WorkflowNodeOutput
+{
+    [DataMember(Name = "name")] public string Name { get; set; }
+    [DataMember(Name = "type")] public string Type { get; set; }
+    [DataMember(Name = "links")] public List<int>? Links { get; set; }
+
+    public static WorkflowNodeOutput Parse(object obj)
+    {
+        var dict = (Dictionary<string, object>)obj;
+        var ret = new WorkflowNodeOutput
+        {
+            Name = dict.GetValueOrDefault("name")?.ToString() ?? throw new Exception("No name found for output"),
+            Type = dict.GetValueOrDefault("type")?.ToString() ?? throw new Exception("No type found for output"),
+            Links = dict.GetValueOrDefault("links") is List<object> links
+                ? links.Map(x => x.ConvertTo<int>())
+                : null
+        };
+        return ret;
     }
 }
 
+public class ComfyNode
+{
+    [DataMember(Name = "id")] public string Id { get; set; }
+    public int? IdInt { get; set; }
+    [DataMember(Name = "type")] public string Type { get; set; }
+
+    [DataMember(Name = "pos")] public object? Pos { get; set; }
+    [DataMember(Name = "size")] public object? Size { get; set; }
+    [DataMember(Name = "flags")] public Dictionary<string,object?>? Flags { get; set; }
+
+    [DataMember(Name = "order")] public int? Order { get; set; }
+    [DataMember(Name = "mode")] public int? Mode { get; set; }
+
+    [DataMember(Name = "inputs")] public List<WorkflowNodeInput>? Inputs { get; set; }
+    public Dictionary<string, WorkflowNodeInput> InputMap { get; set; } = new();
+    [DataMember(Name = "outputs")] public List<WorkflowNodeOutput>? Outputs { get; set; }
+    [DataMember(Name = "widgets_values")] public List<object>? WidgetsValues { get; set; }
+
+    public static ComfyNode Parse(Dictionary<string, object?> nodeObj)
+    {
+        var ret = new ComfyNode
+        {
+            Id = nodeObj.GetValueOrDefault("id")?.ToString() ?? throw new Exception("No id found for node"),
+            Type = nodeObj.GetValueOrDefault("type")?.ToString() ?? throw new Exception("No type found for node"),
+            Pos = nodeObj.GetValueOrDefault("pos"),
+            Size = nodeObj.GetValueOrDefault("size"),
+            Flags = nodeObj.GetValueOrDefault("flags") as Dictionary<string, object?>,
+            Order = nodeObj.GetValueOrDefault("order")?.ConvertTo<int>(),
+            Mode = nodeObj.GetValueOrDefault("mode")?.ConvertTo<int>(),
+            Inputs = nodeObj.GetValueOrDefault("inputs") is List<object> inputs
+                ? inputs.Map(WorkflowNodeInput.Parse)
+                : null,
+            Outputs = nodeObj.GetValueOrDefault("outputs") is List<object> outputs
+                ? outputs.Map(WorkflowNodeOutput.Parse)
+                : null,
+            WidgetsValues = nodeObj.GetValueOrDefault("widgets_values") as List<object>
+        };
+        if (int.TryParse(ret.Id, out var idInt))
+        {
+            ret.IdInt = idInt;
+        }
+        if (ret.Inputs != null)
+            ret.InputMap = ret.Inputs.ToDictionary(x => x.Name, x => x);
+        return ret;
+    }
+}
+
+/// <summary>
+/// Array of links in the workflow JSON.
+/// https://docs.comfy.org/specs/workflow_json
+/// </summary>
 public class WorkflowLink
 {
-    // Link structure: [link_id, source_node_id, source_output_index, target_node_id, target_input_name, target_input_index_maybe?]
-    // We'll read this into a simple class for clarity.
-    [JsonPropertyName("0")] public int Id { get; set; }
-    [JsonPropertyName("1")] public string SourceNodeId { get; set; } = "";
-    [JsonPropertyName("2")] public int SourceOutputIndex { get; set; }
-    [JsonPropertyName("3")] public string TargetNodeId { get; set; } = "";
-    [JsonPropertyName("4")] public string TargetInputName { get; set; } = "";
-    // [JsonPropertyName("5")] public int? TargetInputIndexMaybe { get; set; } // Sometimes present, not always needed
+    public int Id { get; set; }
+    public string OriginId { get; set; }
+    public int? OriginIdInt { get; set; }
+    public string OriginSlot { get; set; }
+    public int? OriginSlotInt { get; set; }
+    public string TargetId { get; set; }
+    public int? TargetIdInt { get; set; }
+    public string TargetSlot { get; set; }
+    public int? TargetSlotInt { get; set; }
+    public string Type => Types.First();
+    public List<string> Types { get; set; }
+    public int? ParentId { get; set; }
 
-    // Helper to deserialize the array format
-    public static WorkflowLink? FromJsonArray(JsonElement element)
+    public static WorkflowLink Parse(List<object> linkArray)
     {
-        if (element.ValueKind != JsonValueKind.Array || element.GetArrayLength() < 5)
-        {
-            return null; // Not a valid link array
-        }
+        if (linkArray.Count < 5)
+            throw new Exception($"Invalid Link Array: {JSON.stringify(linkArray)}");
 
-        var link = new WorkflowLink
+        var ret = new WorkflowLink
         {
-            Id = element[0].GetInt32()
+            Id = linkArray[0].ConvertTo<int>(),
+            OriginId = linkArray[1].ToString() ?? "",
+            OriginSlot = linkArray[2].ToString() ?? "",
+            TargetId = linkArray[3].ToString() ?? "",
+            TargetSlot = linkArray[4].ToString() ?? "",
+            Types = linkArray[5] is List<object> arrTypes
+                ? arrTypes.Map(x => x.ToString() ?? "")
+                : [linkArray[5].ToString() ?? ""]
         };
+        if (int.TryParse(ret.OriginId, out var originIdInt))
+            ret.OriginIdInt = originIdInt;
+        if (int.TryParse(ret.OriginSlot, out var originSlotInt))
+            ret.OriginSlotInt = originSlotInt;
+        if (int.TryParse(ret.TargetId, out var targetIdInt))
+            ret.TargetIdInt = targetIdInt;
+        if (int.TryParse(ret.TargetSlot, out var targetSlotInt))
+            ret.TargetSlotInt = targetSlotInt;
 
-        // Handle source node ID (could be number or string)
-        if (element[1].ValueKind == JsonValueKind.Number)
+        if (linkArray.Count > 6)
         {
-            link.SourceNodeId = element[1].GetInt32().ToString();
+            ret.ParentId = linkArray[6].ConvertTo<int>();
         }
-        else
-        {
-            link.SourceNodeId = element[1].GetRawText().Trim('"');
-        }
-
-        link.SourceOutputIndex = element[2].GetInt32();
-
-        // Handle target node ID (could be number or string)
-        if (element[3].ValueKind == JsonValueKind.Number)
-        {
-            link.TargetNodeId = element[3].GetInt32().ToString();
-        }
-        else
-        {
-            link.TargetNodeId = element[3].GetRawText().Trim('"');
-        }
-
-        // Handle target input name
-        if (element[4].ValueKind == JsonValueKind.String)
-        {
-            link.TargetInputName = element[4].GetString() ?? "";
-        }
-        else if (element[4].ValueKind == JsonValueKind.Number)
-        {
-            link.TargetInputName = element[4].GetInt32().ToString();
-        }
-
-        return link;
+        return ret;
     }
-}
-
-public class ComfyUIWorkflow
-{
-    [JsonPropertyName("nodes")]
-    public List<WorkflowNode>? NodesArray { get; set; } // For parsing workflows with nodes as array
-
-    [JsonPropertyName("processed_nodes")]
-    public Dictionary<string, WorkflowNode> Nodes { get; set; } = new(); // For internal use
-
-    [JsonPropertyName("links")]
-    // Links are represented as arrays in the workflow JSON, so we need a custom converter or process them manually
-    // Let's process them manually after deserializing the root.
-    public List<JsonElement>? LinksJson { get; set; } // Temporarily hold raw link data
-
-    // Use a different property name for the processed links to avoid collision with LinksJson
-    [JsonPropertyName("processed_links")]
-    public List<WorkflowLink> Links { get; set; } = new List<WorkflowLink>(); // Processed links
-
-    // Add a method to process the raw link data and nodes after deserialization
-    public void ProcessData()
-    {
-        // Process links
-        Links.Clear();
-        if (LinksJson != null)
-        {
-            foreach (var linkElement in LinksJson)
-            {
-                var link = WorkflowLink.FromJsonArray(linkElement);
-                if (link != null)
-                {
-                    Links.Add(link);
-                }
-            }
-        }
-
-        LinksJson = null; // Clear raw data to save memory if needed
-
-        // Process nodes from array to dictionary if needed
-        if (NodesArray is { Count: > 0 })
-        {
-            Nodes.Clear();
-            foreach (var node in NodesArray)
-            {
-                // Process inputs for this node
-                node.ProcessInputs();
-
-                if (node.Id != null)
-                {
-                    Nodes[node.Id] = node;
-                }
-            }
-        }
-    }
-}
-
-public class ApiNode
-{
-    [JsonPropertyName("inputs")]
-    public Dictionary<string, object> Inputs { get; set; } = new(); // InputName -> value or [source_node_id, output_index]
-    [JsonPropertyName("class_type")] public string ClassType { get; set; } = "";
-}
-
-public class ApiPrompt
-{
-    // Key is the workflow node ID (string)
-    [JsonPropertyName("prompt")]
-    public Dictionary<string, ApiNode> Prompt { get; set; } = new();
-
-    // Other optional properties like extra_data, client_id can be added here
-    [JsonPropertyName("extra_data")]
-    public JsonObject? ExtraData { get; set; }
-
-    [JsonPropertyName("client_id")]
-    public string? ClientId { get; set; }
 }
 
 public static class ComfyConverters
 {
-    public static JsonSerializerOptions JsonOptions => new() { PropertyNameCaseInsensitive = true };
-    public static JsonSerializerOptions JsonPromptOptions => new()
-    {
-        WriteIndented = true, // Optional: for human-readable output
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull // Don't write null properties
-    };
-
     /// <summary>
     /// Converts a ComfyUI workflow JSON string to an /api/prompt JSON string.
     /// Requires object_info.json to have been loaded first via LoadObjectInfo.
@@ -244,41 +154,67 @@ public static class ComfyConverters
     /// <returns>The JSON content for the /api/prompt endpoint.</returns>
     /// <exception cref="InvalidOperationException">Thrown if object_info.json was not loaded.</exception>
     /// <exception cref="JsonException">Thrown if the workflow JSON is invalid.</exception>
-    public static string ConvertWorkflowToApiPrompt(string workflowJson, Dictionary<string, NodeInfo> nodeDefs, string? clientId=null, ILogger? log=null)
+    public static ApiPrompt ConvertWorkflowToApiPrompt(Dictionary<string, object?> workflow,
+        Dictionary<string, NodeInfo> nodeDefs, string? clientId = null, ILogger? log = null)
     {
         log ??= NullLogger.Instance;
-        
-        var workflowJsonNode = JsonNode.Parse(workflowJson);
+        clientId ??= Guid.NewGuid().ToString("N");
 
-        var workflow = workflowJsonNode.Deserialize<ComfyUIWorkflow>(JsonOptions);
-        if (workflow == null)
-            throw new JsonException("Invalid ComfyUI workflow JSON format.");
+        // var workflowJsonNode = JsonNode.Parse(workflowJson);
+        //
+        // var workflow = workflowJsonNode.Deserialize<ComfyUIWorkflow>(JsonOptions);
+        // if (workflow == null)
+        //     throw new JsonException("Invalid ComfyUI workflow JSON format.");
+        //
+        // // Process the array-based data into our structured format
+        // workflow.ProcessData();
 
-        // Process the array-based data into our structured format
-        workflow.ProcessData();
+        var nodesObjs = workflow.GetValueOrDefault("nodes") as List<object> ?? TypeConstants.EmptyObjectList;
+        var nodes = new Dictionary<string, ComfyNode>();
+        foreach (var nodeObj in nodesObjs)
+        {
+            if (nodeObj is Dictionary<string, object?> nodeDict)
+            {
+                var node = ComfyNode.Parse(nodeDict);
+                nodes[node.Id] = node;
+            }
+        }
 
         // Check if we have nodes to process
-        if (workflow.Nodes.Count == 0)
-            throw new JsonException("No nodes found in workflow JSON.");
-        
+        if (nodesObjs.Count == 0)
+            throw new Exception("No nodes found in workflow JSON.");
+
+        var links = new List<WorkflowLink>();
+        var linksObjs = workflow.GetValueOrDefault("links") as List<object> ?? TypeConstants.EmptyObjectList;
+        foreach (var linkObj in linksObjs)
+        {
+            if (linkObj is List<object> linkArray)
+            {
+                links.Add(WorkflowLink.Parse(linkArray));
+            }
+        }
+
+        //ComfyUIWorkflow
         var apiPrompt = new ApiPrompt
         {
-            ClientId = Guid.NewGuid().ToString("N"),
-            ExtraData = new JsonObject {
-                ["extra_pnginfo"] = new JsonObject {
-                    ["workflow"] = workflowJsonNode
+            ClientId = clientId,
+            ExtraData = new Dictionary<string, object?>
+            {
+                ["extra_pnginfo"] = new Dictionary<string, object?>
+                {
+                    ["workflow"] = workflow
                 },
-                ["client_id"] = clientId ?? Guid.NewGuid().ToString("N"),
+                ["client_id"] = clientId,
             },
         };
-        
+
         var linkLookup = new Dictionary<int, WorkflowLink>();
-        foreach (var link in workflow.Links)
+        foreach (var link in links)
         {
             linkLookup[link.Id] = link;
         }
 
-        foreach (var nodeEntry in workflow.Nodes)
+        foreach (var nodeEntry in nodes)
         {
             var nodeId = nodeEntry.Key;
             var workflowNode = nodeEntry.Value;
@@ -286,6 +222,14 @@ public static class ComfyConverters
             if (string.IsNullOrEmpty(workflowNode.Type))
             {
                 log.LogWarning("Node {NodeId} has no class_type. Skipping.", nodeId);
+                continue;
+            }
+
+            // Skip PrimitiveNode and Note types as they're not actual nodes in the API prompt
+            // PrimitiveNode are just containers for values that are used by other nodes
+            // Note nodes are just for documentation and don't affect the workflow
+            if (workflowNode.Type == "PrimitiveNode" || workflowNode.Type == "Note")
+            {
                 continue;
             }
 
@@ -300,7 +244,9 @@ public static class ComfyConverters
             if (!nodeDefs.TryGetValue(workflowNode.Type, out var nodeInfo) ||
                 nodeInfo?.InputOrder == null)
             {
-                log.LogWarning("Node definition not found or incomplete for class_type '{WorkflowNodeType}'. Attempting partial conversion without input order.", workflowNode.Type);
+                log.LogWarning(
+                    "Node definition not found or incomplete for class_type '{WorkflowNodeType}'. Attempting partial conversion without input order.",
+                    workflowNode.Type);
                 // If object_info is missing, we can only copy widget values and inputs dictionary directly
                 // This might not map widgets correctly to names, but it's a fallback.
                 // A more robust approach might fail conversion here.
@@ -314,13 +260,30 @@ public static class ComfyConverters
 
                 if (workflowNode.Inputs != null)
                 {
-                    foreach (var inputDef in workflowNode.Inputs)
+                    foreach (var inputDef in workflowNode.InputMap)
                     {
                         if (inputDef.Value.Link.HasValue &&
                             linkLookup.TryGetValue(inputDef.Value.Link.Value, out var link))
                         {
-                            // Add connection: [source_node_id, source_output_index]
-                            apiNode.Inputs[inputDef.Key] = new object[] { link.SourceNodeId, link.SourceOutputIndex };
+                            // Check if the origin node is a PrimitiveNode
+                            var originNodeId = link.OriginId;
+                            if (nodes.TryGetValue(originNodeId, out var originNode) && originNode.Type == "PrimitiveNode")
+                            {
+                                // For PrimitiveNode, use the widget value directly
+                                if (originNode.WidgetsValues != null && originNode.WidgetsValues.Count > 0)
+                                {
+                                    apiNode.Inputs[inputDef.Key] = originNode.WidgetsValues[0];
+                                }
+                            }
+                            else
+                            {
+                                // Add connection: [origin_id, origin_slot]
+                                apiNode.Inputs[inputDef.Key] = new[]
+                                {
+                                    link.OriginId,
+                                    link.OriginSlotInt ?? (object)link.OriginSlot,
+                                };
+                            }
                         }
                         // Note: If workflowNode.Inputs contained static values directly, this fallback would need to handle that.
                         // Standard workflow JSON usually puts static values in widgets_values.
@@ -338,9 +301,9 @@ public static class ComfyConverters
 
                 foreach (var inputName in allInputNamesInOrder)
                 {
-                    WorkflowNodeInputDefinition? inputDef = null;
-                    bool isConnected = workflowNode.Inputs != null &&
-                                       workflowNode.Inputs.TryGetValue(inputName, out inputDef) &&
+                    WorkflowNodeInput? inputDef = null;
+                    bool isConnected = workflowNode.InputMap != null &&
+                                       workflowNode.InputMap.TryGetValue(inputName, out inputDef) &&
                                        inputDef.Link.HasValue;
 
                     if (isConnected)
@@ -349,12 +312,30 @@ public static class ComfyConverters
                         var linkId = inputDef!.Link!.Value;
                         if (linkLookup.TryGetValue(linkId, out var link))
                         {
-                            // Add connection: [source_node_id, source_output_index]
-                            apiNode.Inputs[inputName] = new object[] { link.SourceNodeId, link.SourceOutputIndex };
+                            // Check if the origin node is a PrimitiveNode
+                            var originNodeId = link.OriginId;
+                            if (nodes.TryGetValue(originNodeId, out var originNode) && originNode.Type == "PrimitiveNode")
+                            {
+                                // For PrimitiveNode, use the widget value directly
+                                if (originNode.WidgetsValues != null && originNode.WidgetsValues.Count > 0)
+                                {
+                                    apiNode.Inputs[inputName] = originNode.WidgetsValues[0];
+                                }
+                            }
+                            else
+                            {
+                                // Add connection: [origin_id, origin_slot]
+                                apiNode.Inputs[inputName] = new[]
+                                {
+                                    link.OriginId,
+                                    link.OriginSlotInt ?? (object)link.OriginSlot,
+                                };
+                            }
                         }
                         else
                         {
-                            log.LogWarning("Link {LinkId} not found for input '{InputName}' on node {NodeId}. Skipping connection.",
+                            log.LogWarning(
+                                "Link {LinkId} not found for input '{InputName}' on node {NodeId}. Skipping connection.",
                                 linkId, inputName, nodeId);
                         }
                     }
@@ -364,13 +345,14 @@ public static class ComfyConverters
                         if (workflowNode.WidgetsValues != null && widgetValueIndex < workflowNode.WidgetsValues.Count)
                         {
                             var nodeInputDef = requiredInputs?.GetValueOrDefault(inputName)
-                                    ?? optionalInputs?.GetValueOrDefault(inputName);
+                                               ?? optionalInputs?.GetValueOrDefault(inputName);
                             var value = workflowNode.WidgetsValues[widgetValueIndex];
-                            
+
                             var inWidgetValues = (nodeInputDef == null && inputName.EndsWith("seed")) ||
-                                nodeInputDef?.Type is ComfyInputType.Int or ComfyInputType.Float
-                                or ComfyInputType.String or ComfyInputType.Boolean or ComfyInputType.Enum 
-                                or ComfyInputType.Combo or ComfyInputType.Filepath;
+                             nodeInputDef?.Type is ComfyInputType.Int or ComfyInputType.Float
+                                 or ComfyInputType.String or ComfyInputType.Boolean
+                                 or ComfyInputType.Enum
+                                 or ComfyInputType.Combo or ComfyInputType.Filepath;
                             if (inWidgetValues)
                             {
                                 apiNode.Inputs[inputName] = value; // Deserialize element to object
@@ -384,7 +366,8 @@ public static class ComfyConverters
                         else
                         {
                             // This indicates a mismatch between object_info and workflow JSON
-                            log.LogWarning("Input '{InputName}' on node {NodeId} (class_type: {WorkflowNodeType}) is not connected and no corresponding value found in widgets_values at index {WidgetValueIndex}. This may result in missing input in API call.",
+                            log.LogWarning(
+                                "Input '{InputName}' on node {NodeId} (class_type: {WorkflowNodeType}) is not connected and no corresponding value found in widgets_values at index {WidgetValueIndex}. This may result in missing input in API call.",
                                 inputName, nodeId, workflowNode.Type, widgetValueIndex);
                             // Optional: Add a default value if available in object_info, though API usually handles missing inputs with defaults.
                         }
@@ -394,7 +377,8 @@ public static class ComfyConverters
                 // Optional: Check if there are leftover widgets_values (indicates mismatch)
                 if (workflowNode.WidgetsValues != null && widgetValueIndex < workflowNode.WidgetsValues.Count)
                 {
-                    log.LogWarning("Node {NodeId} (class_type: {WorkflowNodeType}) has {UnexpectedValues} unexpected values in widgets_values.",
+                    log.LogWarning(
+                        "Node {NodeId} (class_type: {WorkflowNodeType}) has {UnexpectedValues} unexpected values in widgets_values.",
                         nodeId, workflowNode.Type, workflowNode.WidgetsValues.Count - widgetValueIndex);
                 }
             }
@@ -403,127 +387,244 @@ public static class ComfyConverters
             apiPrompt.Prompt[nodeId] = apiNode;
         }
 
-        // Serialize the API prompt structure to JSON
-        return JsonSerializer.Serialize(apiPrompt, JsonPromptOptions);
+        return apiPrompt;
     }
-    
-    public static ComfyResult ParseComfyResult(string resultJson, string? comfyApiBaseUrl=null)
+
+    public static WorkflowResult ParseComfyResult(Dictionary<string, object?> result, string? comfyApiBaseUrl = null)
     {
-        using var jsonDoc = JsonDocument.Parse(resultJson, new JsonDocumentOptions
-        {
-            AllowTrailingCommas = true,
-            CommentHandling = JsonCommentHandling.Skip,
-        });
-
-        var root = jsonDoc.RootElement;
-
-        var ret = new ComfyResult
-        {
-            PromptId = root.EnumerateObject().First().Name,
-        };
-
+        var promptId = result.Keys.First();
         // Access the outputs section for this execution
-        var elPrompt = root.GetProperty(ret.PromptId);
-        var elOutputs = elPrompt.GetProperty("outputs");
+        var elPrompt = (Dictionary<string, object?>)result[promptId]!;
 
-        if (elPrompt.TryGetProperty("prompt", out var elPromptTuple))
+        var ret = elPrompt.GetValueOrDefault("outputs") is Dictionary<string, object?> elOutputs
+            ? GetOutputs(elOutputs, minRating:Rating.PG)
+            : new WorkflowResult();
+
+        if (comfyApiBaseUrl != null && ret.Assets?.Count > 0)
         {
-            var promptTuple = elPromptTuple.EnumerateArray().ToList();
-            if (promptTuple.Count > 3)
+            foreach (var asset in ret.Assets.Safe())
             {
-                var extraData = promptTuple[3];
-                if (extraData.ValueKind == JsonValueKind.Object)
+                if (asset.Url.StartsWith('/'))
                 {
-                    if (extraData.TryGetProperty("client_id", out var elClientId))
-                    {
-                        ret.ClientId = elClientId.GetString();
-                    }
+                    asset.Url = comfyApiBaseUrl.CombineWith(asset.Url);
                 }
             }
         }
 
-        // Iterate through all output nodes
-        foreach (var nodeOutput in elOutputs.EnumerateObject())
+        if (elPrompt.TryGetValue("prompt", out var objPromptTuple) && objPromptTuple is List<object> promptTuple)
         {
-            var nodeId = nodeOutput.Name;
-
-            // Extract Node Images
-            if (nodeOutput.Value.TryGetProperty("images", out var imagesArray))
+            if (promptTuple.Count > 3)
             {
-                ret.Assets ??= [];
-                foreach (var image in imagesArray.EnumerateArray())
+                var extraData = promptTuple[3];
+                if (extraData is Dictionary<string, object?> extraDataDict)
                 {
-                    if (image.TryGetProperty("filename", out var elFilename) &&
-                        image.TryGetProperty("type", out var type))
+                    if (extraDataDict.TryGetValue("client_id", out var oClientId))
                     {
-                        var filename = elFilename.GetString();
-                        if (string.IsNullOrEmpty(filename)) continue;
+                        ret.ClientId = oClientId?.ToString();
+                    }
+                }
+            }
+        }
+        if (elPrompt.TryGetValue("status", out var oStatus) && oStatus is Dictionary<string, object?> status)
+        {
+            ret.Duration = GetDuration(status);
+        }
+        return ret;
+    }
 
-                        image.TryGetProperty("subfolder", out var elSubFolder);
+    public static WorkflowResult GetOutputs(Dictionary<string, object?> outputs, Rating minRating)
+    {
+        var ret = new WorkflowResult();
+        // Iterate through all output nodes
+        foreach (var nodeOutput in outputs)
+        {
+            var nodeId = nodeOutput.Key;
+            if (nodeOutput.Value is Dictionary<string, object?> nodeOutputs)
+            {
+                // Extract Node Images
+                if (nodeOutputs.TryGetValue("images", out var oImagesArray) &&
+                    oImagesArray is List<object> imagesArray)
+                {
+                    ret.Assets ??= [];
+                    foreach (var oImage in imagesArray)
+                    {
+                        var image = (Dictionary<string, object?>)oImage;
+                        if (image.TryGetValue("filename", out var oFilename) && oFilename is string filename &&
+                            image.TryGetValue("type", out var oType))
+                        {
+                            if (string.IsNullOrEmpty(filename)) continue;
 
-                        var mimeType = MimeTypes.GetMimeType(filename);
-                        var assetType = mimeType.StartsWith("image")
-                            ? AssetType.Image
-                            : mimeType.StartsWith("video")
-                                ? AssetType.Video
-                                : mimeType.StartsWith("audio")
-                                    ? AssetType.Audio
-                                    : mimeType.StartsWith("text")
-                                        ? AssetType.Text
-                                        : AssetType.Binary;
-                        
-                        var path = "/view"
-                            .AddQueryParam("filename", filename)
-                            .AddQueryParam("type", type.GetString() ?? "")
-                            .AddQueryParam("subfolder", elSubFolder.GetString() ?? "");
+                            image.TryGetValue("subfolder", out var elSubFolder);
 
-                        ret.Assets.Add(new() {
+                            var mimeType = MimeTypes.GetMimeType(filename);
+                            var assetType = mimeType.StartsWith("image")
+                                ? AssetType.Image
+                                : mimeType.StartsWith("video")
+                                    ? AssetType.Video
+                                    : mimeType.StartsWith("audio")
+                                        ? AssetType.Audio
+                                        : mimeType.StartsWith("text")
+                                            ? AssetType.Text
+                                            : AssetType.Binary;
+                            
+                            /* ratings format: {
+                                 "predicted_rating" : "R",
+                                 "confidence" : 0.2354736328125,
+                                 "all_scores" : {
+                                   "G" : 0.2200927734375,
+                                   "PG" : 0.2335205078125,
+                                   "PG-13" : 0.2177734375,
+                                   "R" : 0.2354736328125,
+                                   "X" : 0.232666015625,
+                                   "XXX" : 0.230712890625
+                                 }
+                               }
+                            */
+                            Ratings? ratings = null;
+                            if (image.TryGetValue("ratings", out var oRatings) &&
+                                oRatings is Dictionary<string, object?> obj)
+                            {
+                                ratings = new Ratings
+                                {
+                                    PredictedRating = obj.GetValueOrDefault("predicted_rating")?.ToString(),
+                                    Confidence = obj.GetValueOrDefault("confidence")?.ConvertTo<double>() ?? 0,
+                                    AllScores = obj.GetValueOrDefault("all_scores") is Dictionary<string, object?> allScores
+                                        ? allScores.ToDictionary(x => x.Key, x => x.Value.ConvertTo<double>())
+                                        : new(),
+                                };
+                            }
+
+                            /* categories format: {
+                                "cat1": 0.5,
+                                "cat2": 0.3,
+                                "cat3": 0.2
+                               }
+                             */
+                            Dictionary<string,double>? categories = null;
+                            if (image.TryGetValue("categories", out var oCategories) &&
+                                oCategories is Dictionary<string, object?> categoriesDict)
+                            {
+                                categories = new();
+                                foreach (var tag in categoriesDict)
+                                {
+                                    categories[tag.Key] = tag.Value.ConvertTo<double>();
+                                }
+                            }
+
+                            /* tags format: {
+                                "tag1": 0.5,
+                                "tag2": 0.3,
+                                "tag3": 0.2
+                               }
+                             */
+                            Dictionary<string,double>? tags = null;
+                            if (image.TryGetValue("tags", out var oTags) &&
+                                oTags is Dictionary<string, object?> tagsDict)
+                            {
+                                tags = new();
+                                foreach (var tag in tagsDict)
+                                {
+                                    tags[tag.Key] = tag.Value.ConvertTo<double>();
+                                }
+                            }
+                            
+                            /* objects format: [
+                                 { "model": "nudenet", "class": "class_name", "score": 0.5, "box": [0, 0, 1, 1] },
+                                 { "model": "erax",    "class": "class_name", "score": 0.3, "box": [0, 0, 1, 1] },
+                               ]
+                             */
+                            List<ObjectDetection>? objects = null;
+                            if (image.TryGetValue("objects", out var oObjects) &&
+                                oObjects is List<object> objectsArray)
+                            {
+                                objects = [];
+                                foreach (var oObject in objectsArray)
+                                {
+                                    if (oObject is Dictionary<string, object?> objectDict)
+                                    {
+                                        var objDetection = objectDict.FromObjectDictionary<ObjectDetection>();
+                                        objects.Add(objDetection);
+                                    }
+                                }
+                            }
+                            
+                            var perceptualHash = image.TryGetValue("phash", out var oPhash) 
+                                ? oPhash?.ToString() 
+                                : null;
+                            var color = image.TryGetValue("color", out var oColor) 
+                                ? oColor?.ToString() 
+                                : null;
+
+                            var path = "/view"
+                                .AddQueryParam("filename", filename)
+                                .AddQueryParam("type", oType?.ToString() ?? "")
+                                .AddQueryParam("subfolder", elSubFolder?.ToString() ?? "");
+
+                            var asset = new ComfyAssetOutput
+                            {
+                                NodeId = nodeId,
+                                Type = assetType,
+                                FileName = filename,
+                                Url = path,
+                                Categories = categories,
+                                Tags = tags,
+                                Ratings = ratings,
+                                Objects = objects,
+                                Phash = perceptualHash,
+                                Color = color,
+                            };
+                            asset.Rating = asset.ToAssetRating(minRating);
+                            ret.Assets.Add(asset);
+                        }
+                    }
+                }
+
+                if (nodeOutputs.TryGetValue("text", out var oTextArray) && oTextArray is List<object> textArray)
+                {
+                    ret.Texts ??= [];
+                    foreach (var text in textArray)
+                    {
+                        ret.Texts.Add(new()
+                        {
                             NodeId = nodeId,
-                            Type = assetType,
-                            FileName = filename,
-                            Url = comfyApiBaseUrl.CombineWith(path),
+                            Text = text.ToString()
                         });
                     }
                 }
             }
-            if (nodeOutput.Value.TryGetProperty("text", out var textArray))
-            {
-                ret.Texts ??= [];
-                foreach (var text in textArray.EnumerateArray())
-                {
-                    ret.Texts.Add(new() {
-                        NodeId = nodeId,
-                        Text = text.GetString()
-                    });
-                }
-            }
         }
 
-        if (elPrompt.TryGetProperty("status", out var elStatus) &&
-            elStatus.TryGetProperty("messages", out var elMessages))
+        return ret;
+    }
+
+    public static TimeSpan? GetDuration(Dictionary<string, object?> status)
+    {
+        long startTimestamp = 0;
+        long endTimestamp = 0;
+
+        if (status.TryGetValue("messages", out var oMessages) && oMessages is List<object> messages)
         {
-            long startTimestamp = 0;
-            long endTimestamp = 0;
-
-            foreach (var message in elMessages.EnumerateArray())
+            foreach (var message in messages)
             {
-                var messageType = message[0].GetString();
-                var elMessageData = message[1];
-
-                if (messageType == "execution_start")
+                var messageTuple = (List<object>)message;
+                var messageType = messageTuple[0].ToString();
+                if (messageTuple[1] is Dictionary<string, object?> msgData)
                 {
-                    startTimestamp = elMessageData.GetProperty("timestamp").GetInt64();
-                }
-                else if (messageType == "execution_success")
-                {
-                    endTimestamp = elMessageData.GetProperty("timestamp").GetInt64();
+                    if (messageType == "execution_start")
+                    {
+                        startTimestamp = msgData.GetValueOrDefault("timestamp").ConvertTo<long>();
+                    }
+                    else if (messageType == "execution_success")
+                    {
+                        endTimestamp = msgData.GetValueOrDefault("timestamp").ConvertTo<long>();
+                    }
                 }
             }
             if (startTimestamp > 0 && endTimestamp > 0)
             {
-                ret.Duration = TimeSpan.FromMilliseconds(endTimestamp - startTimestamp);
+                return TimeSpan.FromMilliseconds(endTimestamp - startTimestamp);
             }
         }
-        return ret;
+        return null;
     }
 }

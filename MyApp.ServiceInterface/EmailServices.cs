@@ -38,11 +38,15 @@ public class SmtpConfig
     /// <summary>
     /// Prevent emails from being sent to real users during development by sending to this Dev email instead
     /// </summary>
+    public string? Bcc { get; set; }
     public string? DevToEmail { get; set; }
     /// <summary>
     /// Keep a copy of all emails sent by BCC'ing a copy to this email address
     /// </summary>
-    public string? Bcc { get; set; }
+    /// <summary>
+    /// Send notifications of new Thread Comments and Reports
+    /// </summary>
+    public string? NotificationsEmail { get; set; }
 }
 
 public class SendEmail

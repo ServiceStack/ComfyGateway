@@ -16,10 +16,53 @@ public class User
     public string? LastName { get; set; }
     public string? DisplayName { get; set; }
     public string? ProfileUrl { get; set; }
+    public string? Ratings { get; set; }
 }
 
-[ValidateIsAdmin]
-public class QueryUsers : QueryDb<User>
+[ValidateIsAuthenticated]
+public class UpdatePreferences : IPost, IReturn<EmptyResponse>
 {
-    public string? Id { get; set; }
+    public List<Rating>? Ratings { get; set; }
+}
+
+[ValidateIsAuthenticated]
+public class UpdateUserAvatar : IPost, IReturn<EmptyResponse>
+{
+    [Input(Type = "file"), UploadTo("avatars")]
+    public string? Avatar { get; set; }
+}
+
+public class GetDeletedRows : IGet, IReturn<GetDeletedRowsResponse>
+{
+    public int? AfterId { get; set; }
+}
+
+public class GetDeletedRowsResponse
+{
+    public int LastId { get; set; }
+    public List<DeletedRow> Results { get; set; }
+    public ResponseStatus? ResponseStatus { get; set; }
+}
+
+public class DeletedRow
+{
+    [AutoIncrement]
+    public int Id { get; set; }
+    public Table Table { get; set; }
+    public string Key { get; set; }
+}
+
+[Flags]
+public enum Table
+{
+    Artifact = 1,
+    ArtifactTag = 2,
+    ArtifactCategory = 3,
+    ArtifactReaction = 4,
+    HiddenArtifact = 5,
+    Thread = 6,
+    Comment = 7,
+    Workflow = 8,
+    WorkflowGeneration = 9,
+    WorkflowVersion = 10,
 }

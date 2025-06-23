@@ -3,15 +3,15 @@ import { ref, computed, onMounted, watch } from "vue"
 const majorGroups = [
     {
         name: 'Image',
-        types: ['text_to_image', 'image_to_image', 'image_to_text']
+        categories: ['Text to Image', 'Image to Image', 'Image to Text']
     },
     {
         name: 'Audio',
-        types: ['audio_to_text', 'text_to_audio']
+        categories: ['Audio to Text', 'Text to Audio']
     },
     {
         name: 'Video',
-        types: ['image_to_video', 'video_to_text']
+        categories: ['Image to Video', 'Video to Text']
     }
 ]
 
@@ -78,19 +78,19 @@ export default {
         <!-- Workflow picker UI -->
         <div class="flex flex-col items-center">
             <!-- Workflow selection area with transition -->
-            <div v-show="show" class="w-full transition-all duration-300 ease-in-out overflow-hidden"
+            <div v-show="show" class="w-full overflow-hidden"
                  style="opacity: 1; transform: translateY(0);"
                  :style="show ? {} : {maxHeight: '0px', opacity: '0', transform: 'translateY(-20px)'}">
                 <!-- Tabs for major groups -->
                 <div class="mb-8">
                     <div class="flex justify-center">
-                        <div class="inline-flex rounded-md shadow-sm space-x-4" role="group" aria-label="Major groups">
-                            <button v-for="group in majorGroups" :key="group.name"
+                        <div class="inline-flex space-x-4" role="group" aria-label="Major groups">
+                            <button v-for="group in majorGroups" :key="group.name" type="button"
                                 @click="activeMajorGroup = group.name"
-                                :class="['flex flex-col items-center px-8 py-4 rounded-lg transition-all duration-200 shadow',
+                                :class="['select-none flex flex-col items-center px-8 py-4 rounded-lg shadow',
                                     activeMajorGroup === group.name
-                                        ? 'bg-indigo-600 text-white shadow-lg transform scale-105'
-                                        : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-indigo-600 border border-gray-200']">
+                                        ? 'bg-indigo-600 dark:bg-indigo-300 text-white dark:text-black shadow-lg transform scale-105'
+                                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-300 border border-gray-200 dark:border-gray-700']">
                                 <!-- Placeholder SVG icons for each group -->
                                 <div class="mb-2">
                                     <svg v-if="group.name === 'Image'" class="h-8 w-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
@@ -114,7 +114,7 @@ export default {
                     <div v-for="workflowType in filteredWorkflowTypes" :key="workflowType" class="mb-4">
                         <!-- Collapsible header with chevron -->
                         <div @click="toggleTypeExpanded(workflowType)"
-                             class="flex items-center cursor-pointer py-2 px-1 hover:bg-gray-50 rounded-md">
+                             class="select-none flex items-center cursor-pointer py-2 px-1 hover:bg-gray-50 dark:hover:bg-slate-900 rounded-md">
                             <!-- Right-pointing chevron when collapsed, down-pointing when expanded -->
                             <svg v-if="!expandedTypes[workflowType]" class="h-5 w-5 text-gray-500 mr-2"
                                  xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -124,16 +124,16 @@ export default {
                                  xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                             </svg>
-                            <h3 class="text-lg font-medium text-gray-900" :title="formatName(workflowType)">{{ formatName(workflowType) }}</h3>
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-white" :title="formatName(workflowType)">{{ formatName(workflowType) }}</h3>
                         </div>
 
                         <!-- Horizontal side-by-side tree view of workflows for each type -->
                         <div v-show="expandedTypes[workflowType]" class="flex flex-wrap mt-4 transition-all duration-300 ease-in-out overflow-hidden">
 
                             <div v-for="(group, groupName) in groupedByType[workflowType]" :key="groupName"
-                                class="mb-6 mr-6 w-64 flex-shrink-0 border border-gray-200 rounded-md p-4 bg-white shadow-sm">
-                                <div class="flex items-center mb-3 pb-2 border-b border-gray-100">
-                                    <div class="flex items-center text-gray-900 font-medium w-full justify-between">
+                                class="mb-6 mr-6 w-64 flex-shrink-0 border border-gray-200 dark:border-gray-600 rounded-md p-4 bg-white dark:bg-gray-800 shadow-sm">
+                                <div class="flex items-center mb-3 pb-2 border-b border-gray-100 dark:border-gray-600">
+                                    <div class="flex items-center text-gray-900 dark:text-gray-100 font-medium w-full justify-between">
                                         <span class="flex items-center" :title="formatGroupName(groupName)">
                                             {{ formatGroupName(groupName) }}
                                         </span>
@@ -143,10 +143,10 @@ export default {
 
                                 <div>
                                     <div v-for="workflow in group" :key="workflow.path"
-                                        class="py-2 flex items-center hover:bg-gray-50 rounded-md px-2 cursor-pointer"
+                                        class="py-2 flex items-center hover:bg-gray-50 dark:hover:bg-slate-900 rounded-md px-2 cursor-pointer"
                                         @click="$emit('select',workflow)">
                                         <svg class="h-5 w-5 text-indigo-500 mr-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
-                                        <span class="text-gray-700 truncate" :title="formatName(workflow.name)">{{ formatName(workflow.name) }}</span>
+                                        <span class="text-gray-700 dark:text-gray-300 truncate" :title="formatName(workflow.name)">{{ formatName(workflow.name) }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -173,7 +173,7 @@ export default {
 
         // Process workflows into structured data
         const processedWorkflows = computed(() => {
-            return props.workflows.map(toWorkflow)
+            return props.workflows
         })
 
         // Get unique workflow types
@@ -190,7 +190,7 @@ export default {
             if (!selectedGroup) return []
 
             // Return types in the exact order they're defined in the major group
-            return selectedGroup.types.filter(type => workflowTypes.value.includes(type))
+            return selectedGroup.categories.filter(category => workflowTypes.value.includes(category))
         })
 
         // Group workflows by type and then by model group
@@ -202,10 +202,10 @@ export default {
                 const groupedByModel = {}
 
                 typeWorkflows.forEach(workflow => {
-                    if (!groupedByModel[workflow.group]) {
-                        groupedByModel[workflow.group] = []
+                    if (!groupedByModel[workflow.base]) {
+                        groupedByModel[workflow.base] = []
                     }
-                    groupedByModel[workflow.group].push(workflow)
+                    groupedByModel[workflow.base].push(workflow)
                 })
 
                 grouped[type] = groupedByModel

@@ -1,100 +1,50 @@
-import { ref, computed, onMounted, onUnmounted } from "vue"
-import { rightPart, combinePaths } from "@servicestack/client"
+import { ref, computed, inject, onMounted, onUnmounted } from "vue"
 
 class Artifact {
     width = 0
     height = 0
-    filePath = ''
-}
-
-export const AssetsBasePath = globalThis.AssetsBasePath = globalThis.Server?.app.baseUrl ?? location.origin
-
-const store = {
-    AssetsBasePath,
-
-    /** @param {Artifact} artifact
-     *  @param {number} minSize
-     *  @param {number} maxSize */
-    getVariantPath(artifact, minSize, maxSize) {
-        const path = rightPart(artifact.filePath, "/artifacts")
-        if (artifact.height > artifact.width)
-            return combinePaths(`/variants/height=${maxSize}`, path)
-        if (artifact.width > artifact.height)
-            return combinePaths(`/variants/width=${maxSize}`, path)
-        return combinePaths(`/variants/width=${minSize}`, path)
-    },
-    getFilePath(cdnPath, artifact, minSize=null) {
-        const size = this.getSize(minSize)
-        const variantPath = size === 'Small'
-            ? this.getVariantPath(artifact, 118, 207)
-            : size === 'Medium'
-                ? this.getVariantPath(artifact, 288, 504)
-                : null
-
-        if (!variantPath)
-            return combinePaths(cdnPath, artifact.filePath)
-        return combinePaths(cdnPath, variantPath)
-    },
-    /** @param {number?} minSize */
-    getSize(minSize=null) {
-        const size = minSize == null
-            ? 'Medium'
-            : minSize < 288
-                ? 'Small'
-                : minSize > 504
-                    ? 'Large'
-                    : 'Medium'
-        return size
-    },
-    getPublicUrl(artifact, minSize = null) {
-        return this.getFilePath(this.AssetsBasePath, artifact, minSize)
-    },
-    resolveBorderColor(artifact, selected) {
-        return selected
-            ? 'border-yellow-300'
-            : 'border-transparent'
-    },
-    getBackgroundStyle(artifact) {
-        return ''
-    },
-    /** @param {Artifact} artifact
-     *  @param {string} [lastImageSrc]
-     *  @param {number?} minSize */
-    getArtifactImageErrorUrl(artifact, lastImageSrc, minSize = null) {
-        return this.solidImageDataUri('#000')
-    },
-    /** @param {string} fill */
-    solidImageDataUri(fill) {
-        return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23${(fill || "#000").substring(1)}' d='M2 2h60v60H2z'/%3E%3C/svg%3E`
-    },
 }
 
 export const ArtifactImage = {
-    template:`<div v-if="artifact" class="overflow-hidden" :style="store.getBackgroundStyle(artifact) + ';' + imageStyle">
-      <img :alt="artifact.prompt" :width="width" :height="height" :class="imageClass"
-           :src="store.getPublicUrl(artifact,minSize)" :loading="loading || 'lazy'" @error="store.getArtifactImageErrorUrl(artifact,null,minSize)">
+    template:`<div v-if="artifact" class="overflow-hidden" :style="(imageStyle ?? '') + ';' + (artifact.style ?? '')" @click="$emit('click', $event)">
+      <img :alt="artifact.prompt" :width="artifact.preview?.width || artifact.width" :height="artifact.preview?.height || artifact.height"
+           :class="[imageClass, draggable ? 'cursor-grab active:cursor-grabbing' : '']"
+           :src="artifact.preview?.url || artifact.url" :loading="loading || 'lazy'" @error="this.src = artifact.errorUrl"
+           :draggable="draggable" @dragstart="handleDragStart">
+
   </div>`,
     props: {
         /** @type {import('vue').PropType<Artifact>} */
         artifact:Object,
         imageClass:String,
-        imageStyle: String,
+        imageStyle:String,
         minSize:Number,
         /** @type {import('vue').PropType<'eager'|'lazy'>} */
         loading:String,
+        draggable:Boolean,
+        generation:Object,
     },
-    setup(props) {
-        const width = computed(() => !props.minSize ? props.artifact.width
-            : (props.artifact?.width > props.artifact.height
-                ? (props.artifact.width / props.artifact.height) * props.minSize
-                : props.minSize))
+    emits:['dragstart', 'click'],
+    setup(props, { emit }) {
+        const store = inject('store')
 
-        const height = computed(() => !props.minSize ? props.artifact.height
-            : (props.artifact.height > props.artifact.width
-                ? (props.artifact.height / props.artifact.width) * props.minSize
-                : props.minSize))
+        function handleDragStart(event) {
+            if (props.draggable && props.generation) {
+                // Set the generation data for the drag operation
+                event.dataTransfer.setData('application/json', JSON.stringify({
+                    type: 'generation',
+                    generationId: props.generation.id,
+                    threadId: props.generation.threadId
+                }))
+                event.dataTransfer.effectAllowed = 'move'
+                emit('dragstart', props.generation)
+            }
+        }
 
-        return { store, width, height, }
+        return {
+            store,
+            handleDragStart
+        }
     }
 }
 
@@ -105,10 +55,12 @@ export const ArtifactGallery = {
     template:`<div>
         <div class="grid grid-cols-3 sm:grid-cols-4">
             <div v-for="artifact in results" :key="artifact.id" :class="[artifact.width > artifact.height ? 'col-span-2' : artifact.height > artifact.width ? 'row-span-2' : '']">
-                <div @click="selected=artifact" class="flex justify-center">
-                    <div class="relative flex flex-col cursor-pointer items-center" :style="'max-width:' + artifact.width + 'px'">
-                        <ArtifactImage :artifact="artifact" :class="['border sm:border-2', store.resolveBorderColor(artifact, selected?.id)]" />
-                        <div class="absolute top-0 left-0 w-full h-full group select-none overflow-hidden border sm:border-2 border-transparent">
+                <slot name="artifact-top" :artifact="artifact" :selected="selected"></slot>
+                <div @click="handleArtifactClick(artifact, $event)" class="flex justify-center cursor-pointer">
+                    <div class="relative flex flex-col items-center" :style="'max-width:' + artifact.width + 'px'">
+                        <ArtifactImage :artifact="artifact" :class="artifact.cls ?? 'border border-transparent'"
+                            :draggable="!!generation" :generation="generation" @dragstart="handleDragStart" @click="handleArtifactClick(artifact, $event)" />
+                        <div class="absolute top-0 left-0 w-full h-full group select-none overflow-hidden border sm:border-2 border-transparent pointer-events-none">
                             <div class="w-full h-full absolute inset-0 z-10 block text-zinc-100 drop-shadow pointer-events-none line-clamp sm:px-2 sm:pb-2 text-sm opacity-0 group-hover:opacity-40 transition duration-300 ease-in-out bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-700 via-gray-900 to-black"></div>
                             <div class="absolute w-full h-full flex z-10 text-zinc-100 justify-between drop-shadow opacity-0 group-hover:opacity-100 transition-opacity sm:mb-1 text-sm">
                                 <div class="relative w-full h-full overflow-hidden flex flex-col justify-between overflow-hidden"></div>
@@ -116,6 +68,7 @@ export const ArtifactGallery = {
                         </div>
                     </div>
                 </div>
+                <slot name="artifact-bottom" :artifact="artifact" :selected="selected"></slot>
             </div>
         </div>
         <ModalDialog v-if="selected" size-class="" @done="selected=null" class="z-20"
@@ -148,9 +101,13 @@ export const ArtifactGallery = {
     </div>`,
     props: {
         results:Array,
+        generation:Object,
     },
+    emits:['start-drag'],
     setup(props, { emit, expose }) {
+        const store = inject('store')
         const selected = ref()
+        const isDragging = ref(false)
 
         // Computed properties for navigation
         const currentIndex = computed(() => {
@@ -206,11 +163,32 @@ export const ArtifactGallery = {
             window.removeEventListener('keydown', handleKeyDown)
         })
 
+        function handleDragStart(generation) {
+            isDragging.value = true
+            emit('start-drag', generation)
+            // Reset dragging state after a short delay
+            setTimeout(() => {
+                isDragging.value = false
+            }, 100)
+        }
+
+        function handleArtifactClick(artifact, event) {
+            // Prevent click if we just started dragging
+            if (isDragging.value) {
+                event.preventDefault()
+                event.stopPropagation()
+                return
+            }
+            selected.value = artifact
+        }
+
         return {
             store,
             selected,
             navigatePrevious,
             navigateNext,
+            handleDragStart,
+            handleArtifactClick,
         }
     }
 }

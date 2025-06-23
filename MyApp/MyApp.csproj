@@ -13,18 +13,25 @@
         <ContainerLabel Include="service" Value="my-app" />
     </ItemGroup>
 
-
     <ItemGroup>
         <Using Include="ServiceStack" />
         <Using Include="MyApp" />
     </ItemGroup>
 
     <ItemGroup>
+        <Watch Include="**\*.js;**\*.mjs;**\*.css;**\*.razor;**\*.html" Exclude="App_Data\**" />
+    </ItemGroup>
+    
+    <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.*" />
         <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.*" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.*" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.*" />
-        <PackageReference Include="Markdig" Version="0.40.*" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.*" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.*" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.*" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.*" />
+        <PackageReference Include="Markdig" Version="0.41.*" />
+        <PackageReference Include="SkiaSharp" Version="3.*" />
+        <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.*" />
     </ItemGroup>
     
     <ItemGroup>
@@ -37,6 +44,7 @@
         <PackageReference Include="ServiceStack" Version="8.*" />
         <PackageReference Include="ServiceStack.Blazor" Version="8.*" />
         <PackageReference Include="ServiceStack.OrmLite.Sqlite.Data" Version="8.*" />
+        <PackageReference Include="ServiceStack.OrmLite.PostgreSQL" Version="8.*" />
         <PackageReference Include="ServiceStack.Extensions" Version="8.*" />
         <PackageReference Include="ServiceStack.Server" Version="8.*" />
         <PackageReference Include="ServiceStack.Jobs" Version="8.*" />
@@ -55,21 +63,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\image_to_image.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\image_to_image_upscale.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\image_to_image_with_mask.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\image_to_text.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\speech_to_text.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text-to-image\flux1.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text-to-image\hidream.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text-to-image\sd3.5-fp8-scaled.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text-to-image\sd35-large.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text-to-image\sd35-turbo.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text-to-image\sdxl-lightning.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text-to-image\sdxl.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text_to_audio.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text_to_image.json" />
-      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\text_to_speech.json" />
+      <Folder Include="App_Data\artifacts\" />
+      <Folder Include="App_Data\files\" />
     </ItemGroup>
 
     <Target Name="tailwind" BeforeTargets="Publish">

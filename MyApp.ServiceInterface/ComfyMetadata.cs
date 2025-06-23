@@ -73,7 +73,7 @@ public class ComfyMetadata
                     var requiredInputs = new Dictionary<string, NodeInputDefinition>();
                     foreach (var reqInput in requiredProp.EnumerateObject())
                     {
-                        requiredInputs[reqInput.Name] = NodeInputDefinition.Parse(reqInput.Value);
+                        requiredInputs[reqInput.Name] = Parse(reqInput.Value);
                     }
                     nodeInfo.Input["required"] = requiredInputs;
                 }
@@ -84,7 +84,7 @@ public class ComfyMetadata
                     var optionalInputs = new Dictionary<string, NodeInputDefinition>();
                     foreach (var optInput in optionalProp.EnumerateObject())
                     {
-                        optionalInputs[optInput.Name] = NodeInputDefinition.Parse(optInput.Value);
+                        optionalInputs[optInput.Name] = Parse(optInput.Value);
                     }
                     nodeInfo.Input["optional"] = optionalInputs;
                 }
@@ -100,63 +100,7 @@ public class ComfyMetadata
 
         return objectInfo;
     }
-}
 
-public class NodeInputOrder
-{
-    [JsonPropertyName("required")] public List<string>? Required { get; set; }
-
-    [JsonPropertyName("optional")] public List<string>? Optional { get; set; }
-
-    [JsonPropertyName("hidden")] public List<string>? Hidden { get; set; }
-
-    // Combine all input names in order
-    public List<string> GetAllInputNamesInOrder()
-    {
-        var names = new List<string>();
-        if (Required != null) names.AddRange(Required);
-        if (Optional != null) names.AddRange(Optional);
-        if (Hidden != null) names.AddRange(Hidden);
-        return names;
-    }
-}
-
-public class NodeInfo
-{
-    // required/optional/hidden -> inputName -> definition
-    [JsonPropertyName("input")] public Dictionary<string, Dictionary<string, NodeInputDefinition>>? Input { get; set; }
-
-    [JsonPropertyName("input_order")] public NodeInputOrder? InputOrder { get; set; }
-
-    [JsonPropertyName("name")] public string Name { get; set; } = ""; // Class type
-    // Other properties like output, display_name, category are not strictly needed for prompt conversion
-
-    public NodeInputDefinition? GetInput(string name)
-    {
-        if (Input == null)
-            return null;
-        foreach (var entry in Input)
-        {
-            if (entry.Value.TryGetValue(name, out var inputDef))
-            {
-                return inputDef;
-            }
-        }
-        return null; 
-    }
-}
-
-public class NodeInputDefinition
-{
-    // In object_info.json, input definitions are arrays with two elements:
-    // ["MODEL", {"tooltip": "..."}] or [["option1", "option2"], {"default": "option1"}]
-    public ComfyInputType Type { get; set; }
-    public Dictionary<string, object>? Options { get; set; }
-    public string[]? EnumValues { get; set; }
-    public Dictionary<string, object>? ComboValues { get; set; }
-    // Special case for seed where it captures 2 widget_values, but is not included in the API prompt
-    public bool? ControlAfterGenerate { get; set; }
-    
     public static NodeInputDefinition Parse(JsonElement rawValue)
     {
         if (rawValue.ValueKind == JsonValueKind.Array && rawValue.GetArrayLength() > 0)
@@ -266,3 +210,4 @@ public class NodeInputDefinition
         return ComfyInputType.Unknown; // Fallback
     }
 }
+

@@ -52,11 +52,11 @@ public class ComfyGateway(ILogger<ComfyGateway> log, IHttpClientFactory clientFa
         return json;
     }
 
-    public async Task<ComfyWorkflowInfo> GetWorkflowInfoAsync(string url, string apiKey, string workflow)
+    public async Task<WorkflowInfo> GetWorkflowInfoAsync(string url, string apiKey, string workflow)
     {
         var json = await GetWorkflowJsonAsync(url, apiKey, workflow);
         var nodeDefs = await GetNodeDefinitionsAsync(url, apiKey);
-        var workflowInfo = ComfyWorkflowParser.Parse(json, workflow, nodeDefs);
+        var workflowInfo = ComfyWorkflowParser.Parse(json.ParseAsObjectDictionary(), workflow, nodeDefs);
         return workflowInfo ?? throw HttpError.NotFound($"Could not parse {workflow}");
     }
 

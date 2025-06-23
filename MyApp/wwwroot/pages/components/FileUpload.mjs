@@ -17,7 +17,7 @@ export default {
 <div>
   <div class="flex items-center justify-center w-full">
     <label :for="id"
-      :class="[isDragging ? 'border-blue-500' : 'border-gray-300 border-dashed', 'relative flex flex-col items-center justify-center w-full h-64 border-2 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100']"
+      :class="[isDragging ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700 border-dashed', 'relative flex flex-col items-center justify-center w-full h-64 border-2 rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700']"
       @dragenter="isDragging = true"
       @dragleave="isDragging = false"
       @dragover.prevent
@@ -26,16 +26,16 @@ export default {
       <slot v-if="$slots.default"></slot>
       <div v-else class="flex flex-col items-center justify-center">
         <slot v-if="$slots.icon" name="icon"></slot>
-        <svg v-else class="w-12 h-12 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <svg v-else class="w-12 h-12 mb-3 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
         </svg>
-        <p class="mb-2 text-gray-500">
+        <p class="mb-2 text-gray-500 dark:text-gray-400">
             <slot v-if="$slots.title" name="title"></slot>
             <template v-else>
                 <span class="font-semibold">Click to upload</span> or drag and drop
             </template>
         </p>
-        <p class="text-sm text-gray-500">
+        <p class="text-sm text-gray-500 dark:text-gray-400">
             {{ acceptLabel ?? wordList(accept?.split(',').map(x => x.replace('.','').toUpperCase())) }}
         </p>
       </div>
@@ -61,13 +61,13 @@ export default {
     </label>
   </div>
     <div>
-        <p v-if="errorField" class="mt-2 flex text-sm text-red-500" :id="id + '-error'">
-            <svg class="mr-1 h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <p v-if="errorField" class="mt-2 flex text-sm text-red-500 dark:text-red-400" :id="id + '-error'">
+            <svg class="mr-1 h-5 w-5 text-red-500 dark:text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
             </svg>
             {{ errorField }}
         </p>
-        <p v-else-if="help" class="mt-2 text-sm text-gray-500" :id="id + '-description'">{{ help }}</p>
+        <p v-else-if="help" class="mt-2 text-sm text-gray-500 dark:text-gray-400" :id="id + '-description'">{{ help }}</p>
     </div>
     <div v-if="multiple" class="mt-3">
         <table class="w-full">
@@ -84,7 +84,7 @@ export default {
                     </div>
                 </td>
                 <td class="align-top pb-2 whitespace-nowrap">
-                    <span v-if="file.contentLength && file.contentLength > 0" class="text-gray-500 dark:text-gray-400 text-sm bg-white dark:bg-black">
+                    <span v-if="file.contentLength && file.contentLength > 0" class="text-gray-500 dark:text-gray-400 text-sm bg-white dark:bg-gray-800">
                         {{formatBytes(file.contentLength)}}
                     </span>
                 </td>

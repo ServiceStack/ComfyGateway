@@ -4,16 +4,172 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ServiceStack;
 using MyApp.ServiceModel;
+using ServiceStack.Text;
 
 namespace MyApp.ServiceInterface;
 
 public class ComfyWorkflowParser
 {
-    public static ComfyWorkflowInfo Parse(string json, string workflowPath, Dictionary<string, NodeInfo> nodeDefs, ILogger? log=null)
+    private static List<Dictionary<string, object?>> GetWorkflowNodes(Dictionary<string, object?> workflow, ILogger log)
+    {
+        if (workflow["nodes"] is not List<object> nodesObj)
+            throw new Exception("No nodes found in workflow JSON");
+        return nodesObj.Map(x => (Dictionary<string, object?>)x);
+    }
+    
+    public static HashSet<string> ExtractNodeTypes(Dictionary<string, object?> workflow, ILogger? log = null)
     {
         log ??= NullLogger.Instance;
-        var workflow = (Dictionary<string,object>) JSON.parse(json);
+        var ret = new HashSet<string>();
 
+        var nodes = GetWorkflowNodes(workflow, log);
+        foreach (var node in nodes)
+        {
+            if (node.GetValueOrDefault("type") is string nodeType)
+            {
+                ret.Add(nodeType);
+            }
+        }
+        return ret;
+    }
+    
+    public static HashSet<string> ExtractAssetPaths(Dictionary<string,object?> workflow, ILogger? log = null)
+    {
+        log ??= NullLogger.Instance;
+        var ret = new HashSet<string>();
+
+        var nodes = GetWorkflowNodes(workflow, log);
+        foreach (var node in nodes)
+        {
+            if (node.GetValueOrDefault("type") is not string nodeType) 
+                continue;
+
+            //https://github.com/comfyanonymous/ComfyUI/blob/master/folder_paths.py
+            if (nodeType is "CheckpointLoaderSimple" 
+                or "CheckpointLoader" 
+                or "unCLIPCheckpointLoader" 
+                or "ImageOnlyCheckpointLoader" 
+                or "CreateHookModelAsLora" 
+                or "CreateHookModelAsLoraModelOnly" 
+                or "CheckpointLoader|pysssss")
+            {
+                var widgetValueIndex = nodeType == "CheckpointLoader" ? 1 : 0;
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("checkpoints/" + widgetValues[widgetValueIndex]);
+                }
+            }
+            else if (nodeType is "VAELoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("vae/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "CLIPLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("clip/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "DualCLIPLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 2 } widgetValues)
+                {
+                    ret.Add("clip/" + widgetValues[0]);
+                    ret.Add("clip/" + widgetValues[1]);
+                }
+            }
+            else if (nodeType is "TripleCLIPLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 3 } widgetValues)
+                {
+                    ret.Add("clip/" + widgetValues[0]);
+                    ret.Add("clip/" + widgetValues[1]);
+                    ret.Add("clip/" + widgetValues[2]);
+                }
+            }
+            else if (nodeType is "QuadrupleCLIPLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 4 } widgetValues)
+                {
+                    ret.Add("clip/" + widgetValues[0]);
+                    ret.Add("clip/" + widgetValues[1]);
+                    ret.Add("clip/" + widgetValues[2]);
+                    ret.Add("clip/" + widgetValues[3]);
+                }
+            }
+            else if (nodeType is "CLIPVisionLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("clip_vision/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "UNETLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("diffusion_models/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "LoraLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("loras/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "UpscaleModelLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("upscale_models/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "ControlNetLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("controlnet/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "StyleModelLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("style_models/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "PhotoMakerLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("photomaker/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "GLIGENLoader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add("gligen/" + widgetValues[0]);
+                }
+            }
+            else if (nodeType is "AssetDownloader")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 3 } widgetValues)
+                {
+                    ret.Add(widgetValues[1].ToString().CombineWith(widgetValues[2]));
+                }
+            }
+        }
+        return ret;
+    }
+
+    public static WorkflowInfo Parse(Dictionary<string,object?> workflow, string workflowPath, Dictionary<string, NodeInfo> nodeDefs, ILogger? log = null)
+    {
+        log ??= NullLogger.Instance;
         if (workflow["nodes"] is not List<object> nodesObj || workflow["links"] is not List<object> links)
             throw new ArgumentException("Invalid workflow JSON");
 
@@ -65,7 +221,7 @@ public class ComfyWorkflowParser
                 if (node.GetValueOrDefault("type") is not string nodeType) continue;
 
                 // If has CLIPTextEncode then inputSource is Text
-                if (nodeType == "CLIPTextEncode")
+                if (nodeType is "CLIPTextEncode" or "CLIPTextEncodeSDXL")
                 {
                     inputSource = ComfyPrimarySource.Text;
                     break;
@@ -110,10 +266,14 @@ public class ComfyWorkflowParser
             }
         }
 
-        if (workflowType == null || inputSource == null || outputSource == null)
-            return null;
-
-        var workflowInfo = new ComfyWorkflowInfo
+        if (inputSource == null)
+            throw new Exception("Could not determine input source");
+        if (outputSource == null)
+            throw new Exception("Could not determine output source");
+        if (workflowType == null)
+            throw new Exception("Could not determine workflow type");
+        
+        var workflowInfo = new WorkflowInfo
         {
             Name = StringFormatters.FormatName(workflowPath.LastRightPart('/').WithoutExtension()),
             Path = workflowPath,
@@ -189,13 +349,36 @@ public class ComfyWorkflowParser
                 }
             }
         }
+        
+        var clipTextEncodeSDXL = nodes.FirstOrDefault(n => n["type"] is "CLIPTextEncodeSDXL");
+        if (clipTextEncodeSDXL != null)
+        {
+            if (clipTextEncodeSDXL["inputs"] is List<object> clipTextEncodeSDXLInputs)
+            {
+                foreach (var input in clipTextEncodeSDXLInputs.Select(i => (Dictionary<string, object?>)i))
+                {
+                    if (input["name"]?.ToString() == "text_l" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
+                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                    else if (input["name"]?.ToString() == "text_g" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
+                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                }
+            }
+        }
 
         // Extract workflow inputs
-        var inputs = new List<ComfyInput>();
+        var inputs = new List<ComfyInputDefinition>();
         if (positiveNodeId != -1)
         {
             // Add positive prompt input
-            inputs.Add(new ComfyInput
+            inputs.Add(new ComfyInputDefinition
             {
                 ClassType = positiveNodeType,
                 NodeId = positiveNodeId,
@@ -211,7 +394,7 @@ public class ComfyWorkflowParser
         if (negativeNodeId != -1)
         {
             // Add negative prompt input
-            inputs.Add(new ComfyInput
+            inputs.Add(new ComfyInputDefinition
             {
                 ClassType = negativeNodeType,
                 NodeId = negativeNodeId,
@@ -234,7 +417,7 @@ public class ComfyWorkflowParser
             {
                 var nodeType = loadCheckpointNode["type"]!.ToString();
                 var nodeId = Convert.ToInt32(loadCheckpointNode["id"]);
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = nodeType,
                     NodeId = nodeId,
@@ -258,7 +441,7 @@ public class ComfyWorkflowParser
                 nodeDefs.TryGetValue("KSampler", out var nodeDef);
                 var nodeId = Convert.ToInt32(kSamplerNode["id"]);
 
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "KSampler",
                     NodeId = nodeId,
@@ -272,7 +455,7 @@ public class ComfyWorkflowParser
                     ControlAfterGenerate = true,
                     Tooltip = "The random seed used for creating the noise.",
                 });
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "KSampler",
                     NodeId = nodeId,
@@ -285,7 +468,7 @@ public class ComfyWorkflowParser
                     Max = 10000,
                     Tooltip = "The number of steps used in the denoising process.",
                 });
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "KSampler",
                     NodeId = nodeId,
@@ -304,7 +487,7 @@ public class ComfyWorkflowParser
                 var samplerNames = nodeDef?.Input.GetValueOrDefault("required").GetValueOrDefault("sampler_name")?.EnumValues ?? [];
                 if (samplerNames.Length == 0)
                     log.LogWarning("No sampler names found in '{Node}' node definition", "KSampler");
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "KSampler",
                     NodeId = nodeId,
@@ -320,7 +503,7 @@ public class ComfyWorkflowParser
                 var schedulerNames = nodeDef?.Input.GetValueOrDefault("required").GetValueOrDefault("scheduler")?.EnumValues ?? [];
                 if (schedulerNames.Length == 0)
                     log.LogWarning("No scheduler names found in '{Node}' node definition", "KSampler");
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "KSampler",
                     NodeId = nodeId,
@@ -332,7 +515,7 @@ public class ComfyWorkflowParser
                     EnumValues = schedulerNames,
                     Tooltip = "The scheduler controls how noise is gradually removed to form the image.",
                 });
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "KSampler",
                     NodeId = nodeId,
@@ -355,7 +538,7 @@ public class ComfyWorkflowParser
                 nodeDefs.TryGetValue("SamplerCustom", out var nodeDef);
                 var nodeId = Convert.ToInt32(samplerCustomNode["id"]);
 
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "SamplerCustom",
                     NodeId = nodeId,
@@ -369,7 +552,7 @@ public class ComfyWorkflowParser
                     ControlAfterGenerate = true,
                     Tooltip = "The random seed used for creating the noise.",
                 });
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "SamplerCustom",
                     NodeId = nodeId,
@@ -393,7 +576,7 @@ public class ComfyWorkflowParser
             if (loadImageNode["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
             {
                 var nodeId = Convert.ToInt32(loadImageNode["id"]);
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "LoadImage",
                     NodeId = nodeId,
@@ -412,7 +595,7 @@ public class ComfyWorkflowParser
             if (loadTTAudioNode["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
             {
                 var nodeId = Convert.ToInt32(loadTTAudioNode["id"]);
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "TT-LoadAudio",
                     NodeId = nodeId,
@@ -431,7 +614,7 @@ public class ComfyWorkflowParser
             if (loadTTVideoNode["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
             {
                 var nodeId = Convert.ToInt32(loadTTVideoNode["id"]);
-                inputs.Add(new ComfyInput
+                inputs.Add(new ComfyInputDefinition
                 {
                     ClassType = "TT-LoadVideoAudio",
                     NodeId = nodeId,
@@ -457,7 +640,7 @@ public class ComfyWorkflowParser
                 // Extract dimensions from EmptyLatentImage node
                 if (node["widgets_values"] is List<object> { Count: >= 3 } widgetValues)
                 {
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -471,7 +654,7 @@ public class ComfyWorkflowParser
                         Step = 8,
                         Tooltip = "The width of the latent images in pixels.",
                     });
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -485,7 +668,7 @@ public class ComfyWorkflowParser
                         Step = 8,
                         Tooltip = "The height of the latent images in pixels.",
                     });
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -505,7 +688,7 @@ public class ComfyWorkflowParser
                 if (node["widgets_values"] is List<object> { Count: >= 2 } widgetValues)
                 {
                     // Add seconds
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -519,7 +702,7 @@ public class ComfyWorkflowParser
                         Step = 0.1m,
                     });
 
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -538,7 +721,7 @@ public class ComfyWorkflowParser
             {
                 if (node["widgets_values"] is List<object> { Count: >= 2 } widgetValues)
                 {
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -562,7 +745,7 @@ public class ComfyWorkflowParser
                     if (samplerNames.Length == 0)
                         log.LogWarning("No '{InputName}' found in '{Node}' node definition", "sampler_name", nodeType);
 
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -580,7 +763,7 @@ public class ComfyWorkflowParser
             {
                 if (node["widgets_values"] is List<object> { Count: >= 2 } widgetValues)
                 {
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -593,7 +776,7 @@ public class ComfyWorkflowParser
                         Max = 10000,
                         Tooltip = "The number of steps used in the denoising process.",
                     });
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -617,7 +800,7 @@ public class ComfyWorkflowParser
                     if (schedulerNames.Length == 0)
                         log.LogWarning("No '{InputName}' found in '{Node}' node definition", "scheduler", nodeType);
 
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -629,7 +812,7 @@ public class ComfyWorkflowParser
                         EnumValues = schedulerNames,
                         Tooltip = "The scheduler controls how noise is gradually removed to form the image.",
                     });
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -642,7 +825,7 @@ public class ComfyWorkflowParser
                         Max = 10000,
                         Tooltip = "The number of steps used in the denoising process.",
                     });
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -662,7 +845,7 @@ public class ComfyWorkflowParser
             {
                 if (node["widgets_values"] is List<object> { Count: >= 3 } widgetValues)
                 {
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -677,7 +860,7 @@ public class ComfyWorkflowParser
                     if (tasks.Length == 0)
                         log.LogWarning("No '{InputName}' found in '{Node}' node definition", "task", nodeType);
 
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -688,7 +871,7 @@ public class ComfyWorkflowParser
                         Default = widgetValues[1],
                         EnumValues = tasks,
                     });
-                    inputs.Add(new ComfyInput
+                    inputs.Add(new ComfyInputDefinition
                     {
                         ClassType = nodeType,
                         NodeId = nodeId,
@@ -740,34 +923,24 @@ public class ComfyWorkflowParser
         return "";
     }
 
-    public static MergeWorkflowResult MergeWorkflow(string workflowJson, Dictionary<string, object> args, Dictionary<string, NodeInfo> nodeDefs, ILogger? log=null)
+    public static MergeWorkflowResult MergeWorkflow(Dictionary<string, object?> workflow, Dictionary<string, object> args, WorkflowInfo workflowInfo, ILogger? log=null)
     {
+        ArgumentNullException.ThrowIfNull(workflow);
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(workflowInfo);
+
         log ??= NullLogger.Instance;
 
         var ret = new MergeWorkflowResult
         {
-            OriginalWorkflow = workflowJson,
+            OriginalWorkflow = workflow,
             Args = new Dictionary<string, object>(args),
         };
 
-        var workflow = Parse(workflowJson, "file.json", nodeDefs, log);
+        if (workflow["nodes"] is not List<object> nodesArray)
+            throw new Exception("No nodes found in workflow JSON");
 
-        // Parse the workflow JSON into a JsonNode that we can modify
-        var workflowNode = JsonNode.Parse(workflowJson);
-        if (workflowNode == null)
-        {
-            log.LogError("Failed to parse workflow JSON");
-            return ret;
-        }
-
-        var nodesArray = workflowNode["nodes"]?.AsArray();
-        if (nodesArray == null)
-        {
-            log.LogError("No nodes found in workflow JSON");
-            return ret;
-        }
-
-        foreach (var input in workflow.Inputs)
+        foreach (var input in workflowInfo.Inputs)
         {
             var argValue = args.GetValueOrDefault(input.Name);
             if (argValue == null)
@@ -775,86 +948,108 @@ public class ComfyWorkflowParser
                 ret.MissingInputs.Add(input.Name);
                 continue;
             }
-            ret.Args.Remove(input.Name);
 
-            // Find the node in the JSON array
-            JsonNode targetNode = null;
-            int nodeIndex = -1;
-
-            for (int i = 0; i < nodesArray.Count; i++)
-            {
-                var node = nodesArray[i];
-                if (node == null) continue;
-
-                if (node["id"]?.GetValue<int>() == input.NodeId)
-                {
-                    targetNode = node;
-                    nodeIndex = i;
-                    break;
-                }
-            }
-
-            if (targetNode == null)
-            {
-                log.LogWarning("Node {NodeId} not found for input '{InputName}'", input.NodeId, input.Name);
-                continue;
-            }
-
-            // Get the widgets_values array
-            var widgetsValues = targetNode["widgets_values"]?.AsArray();
-            if (widgetsValues == null)
-            {
-                log.LogWarning("No widgets_values found for node {NodeId} for input '{InputName}'", input.NodeId, input.Name);
-                continue;
-            }
-
-            // Check if the value index is valid
-            if (input.ValueIndex >= widgetsValues.Count)
-            {
-                log.LogWarning("Value index {ValueIndex} is out of range for node {NodeId} widgets_values (count: {Count})",
-                    input.ValueIndex, input.NodeId, widgetsValues.Count);
-                continue;
-            }
-
-            // Replace the widget value with the argument value
             try
             {
-                // Convert the argument value to the appropriate type based on the input type
-                JsonNode newValue;
+                ret.Args.Remove(input.Name);
 
-                switch (input.Type)
+                // Find the node in the JSON array
+                Dictionary<string,object?>? targetNode = null;
+                int nodeIndex = -1;
+
+                for (int i = 0; i < nodesArray.Count; i++)
                 {
-                    case ComfyInputType.Int:
-                        newValue = argValue is JsonElement elInt
-                            ? JsonValue.Create(elInt.GetInt64())
-                            : JsonValue.Create(Convert.ToInt64(argValue));
+                    var node = nodesArray[i] as Dictionary<string, object?>;
+                    if (node == null) continue;
+
+                    if (node.GetValueOrDefault("id")?.ConvertTo<int>() == input.NodeId)
+                    {
+                        targetNode = node;
+                        nodeIndex = i;
                         break;
-                    case ComfyInputType.Float:
-                        newValue = argValue is JsonElement elFloat
-                            ? JsonValue.Create(elFloat.GetDouble())
-                            : JsonValue.Create(Convert.ToDouble(argValue));
-                        break;
-                    case ComfyInputType.Boolean:
-                        newValue = argValue is JsonElement elBool
-                            ? JsonValue.Create(elBool.GetBoolean())
-                            : JsonValue.Create(Convert.ToBoolean(argValue));
-                        break;
-                    case ComfyInputType.String:
-                    case ComfyInputType.Enum:
-                    default:
-                        newValue = JsonValue.Create(argValue.ToString());
-                        break;
+                    }
                 }
 
-                // Replace the value in the widgets_values array
-                widgetsValues[input.ValueIndex] = newValue;
-                log.LogDebug("Replaced value at index {ValueIndex} for node {NodeId} with {Value}",
-                    input.ValueIndex, input.NodeId, argValue);
+                if (targetNode == null)
+                {
+                    log.LogWarning("Node {NodeId} not found for input '{InputName}'", input.NodeId, input.Name);
+                    continue;
+                }
+
+                // Get the widgets_values array
+                if (targetNode.GetValueOrDefault("widgets_values") is not List<object?> widgetsValues)
+                {
+                    log.LogWarning("No widgets_values found for node {NodeId} for input '{InputName}'", input.NodeId, input.Name);
+                    continue;
+                }
+
+                // Check if the value index is valid
+                if (input.ValueIndex >= widgetsValues.Count)
+                {
+                    log.LogWarning("Value index {ValueIndex} is out of range for node {NodeId} widgets_values (count: {Count})",
+                        input.ValueIndex, input.NodeId, widgetsValues.Count);
+                    continue;
+                }
+                
+                object LargestInteger(object? value)
+                {
+                    var longValue = value.ConvertTo<long>();
+                    if (longValue is > int.MinValue and < int.MaxValue)
+                    {
+                        return (int)longValue;
+                    }
+                    return longValue;
+                }
+
+                // Replace the widget value with the argument value
+                try
+                {
+                    // Convert the argument value to the appropriate type based on the input type
+                    object? newValue;
+                    switch (input.Type)
+                    {
+                        case ComfyInputType.Int:
+                            newValue = argValue is JsonElement elInt
+                                ? elInt.AsObject()
+                                : LargestInteger(argValue);
+                            break;
+                        case ComfyInputType.Float:
+                            newValue = argValue is JsonElement elFloat
+                                ? elFloat.ValueKind == JsonValueKind.Number
+                                    ? elFloat.GetDouble()
+                                    : elFloat.AsObject()
+                                : argValue.ConvertTo<double>();
+                            break;
+                        case ComfyInputType.Boolean:
+                            newValue = argValue is JsonElement elBool 
+                                ? elBool.ValueKind is JsonValueKind.True or JsonValueKind.False
+                                    ? elBool.GetBoolean()
+                                    : elBool.AsObject().ConvertTo<bool>()
+                                : argValue.ConvertTo<bool>();
+                            break;
+                        case ComfyInputType.String:
+                        case ComfyInputType.Enum:
+                        default:
+                            newValue = argValue is JsonElement elAny
+                                ? elAny.AsObject()?.ToString()
+                                : argValue.ConvertTo<string>();
+                            break;
+                    }
+
+                    // Replace the value in the widgets_values array
+                    widgetsValues[input.ValueIndex] = newValue;
+                    log.LogDebug("Replaced value at index {ValueIndex} for node {NodeId} with {Value}",
+                        input.ValueIndex, input.NodeId, argValue);
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Failed to replace widget value for node {NodeId} at index {ValueIndex} with value {Value}",
+                        input.NodeId, input.ValueIndex, argValue);
+                }
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                log.LogError(ex, "Failed to replace widget value for node {NodeId} at index {ValueIndex} with value {Value}",
-                    input.NodeId, input.ValueIndex, argValue);
+                log.LogError(e, "Failed to merge workflow for input '{InputName}' with '{ArgValue}'", input.Name, argValue);
             }
         }
 
@@ -862,7 +1057,7 @@ public class ComfyWorkflowParser
         ret.ExtraInputs.AddRange(ret.Args.Keys);
 
         // Serialize the modified workflow back to JSON
-        ret.Result = workflowNode.ToJsonString();
+        ret.Result = workflow;
 
         return ret;
     }
@@ -870,9 +1065,9 @@ public class ComfyWorkflowParser
 
 public class MergeWorkflowResult
 {
-    public string OriginalWorkflow { get; set; }
+    public Dictionary<string, object?> OriginalWorkflow { get; set; }
     public Dictionary<string,object> Args { get; set; }
     public List<string> MissingInputs { get; set; } = [];
     public List<string> ExtraInputs { get; set; } = [];
-    public string Result { get; set; }
+    public Dictionary<string, object?> Result { get; set; }
 }

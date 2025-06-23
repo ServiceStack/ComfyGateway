@@ -1,9 +1,10 @@
 using System.Net;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ServiceStack.Blazor;
 using MyApp.Components;
 using MyApp.Data;
@@ -24,14 +25,23 @@ services.AddScoped<IdentityRedirectManager>();
 services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
 
 services.AddAuthorization();
-services.AddAuthentication(options =>
-    {
-        options.DefaultScheme = IdentityConstants.ApplicationScheme;
-        options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
-    })
-    .AddIdentityCookies();
+var authBuilder = services.AddAuthentication(options => {
+    options.DefaultScheme = IdentityConstants.ApplicationScheme;
+    options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+});
+if (AppConfig.Instance.GoogleClientId != null)
+{
+    authBuilder.AddGoogle(options => {
+        options.ClientId = AppConfig.Instance.GoogleClientId;
+        options.ClientSecret = AppConfig.Instance.GoogleClientSecret!;
+        options.ClaimActions.MapJsonKey("urn:google:profile", "profile");
+        options.ClaimActions.MapJsonKey("urn:google:image", "picture");
+    });
+}
+authBuilder.AddIdentityCookies();
+
 services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo("App_Data"));
+    .PersistKeysToFileSystem(new DirectoryInfo(config.GetAppDataPath()));
 
 services.AddDatabaseDeveloperPageExceptionFilter();
 
@@ -41,10 +51,11 @@ services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfi
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 // Uncomment to send emails with SMTP, configure SMTP with "SmtpConfig" in appsettings.json
 // services.AddSingleton<IEmailSender<ApplicationUser>, EmailSender>();
-// services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, AdditionalUserClaimsPrincipalFactory>();
+services.TryAddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, AdditionalUserClaimsPrincipalFactory>();
 
 var baseUrl = builder.Configuration["ApiBaseUrl"] ??
     (builder.Environment.IsDevelopment() ? "https://localhost:5001" : "http://" + IPAddress.Loopback);
@@ -77,6 +88,9 @@ app.MapRazorComponents<App>();
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+// Requires .NET 9
+// app.UseServerEvents();
 
 app.UseServiceStack(new AppHost(), options => {
     options.MapEndpoints();

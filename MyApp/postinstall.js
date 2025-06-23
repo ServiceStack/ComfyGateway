@@ -6,6 +6,8 @@ const files = {
     mjs: {
         'vue.mjs':                         '/vue@3/dist/vue.esm-browser.js',
         'vue.min.mjs':                     '/vue@3/dist/vue.esm-browser.prod.js',
+        'vue-router.mjs':                  '/vue-router@4/dist/vue-router.esm-browser.js',
+        'vue-router.min.mjs':              '/vue-router@4/dist/vue-router.esm-browser.prod.js',
         'servicestack-client.mjs':         '/@servicestack/client@2/dist/servicestack-client.mjs',
         'servicestack-client.min.mjs':     '/@servicestack/client@2/dist/servicestack-client.min.mjs',
         'servicestack-vue.mjs':            '/@servicestack/vue@3/dist/servicestack-vue.mjs',

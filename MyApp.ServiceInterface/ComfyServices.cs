@@ -1,11 +1,15 @@
+using System.Data;
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MyApp.ServiceInterface.Commands;
 using MyApp.ServiceModel;
 using ServiceStack;
 using ServiceStack.Data;
 using ServiceStack.Host;
 using ServiceStack.Jobs;
 using ServiceStack.OrmLite;
+using ServiceStack.Text;
 
 namespace MyApp.ServiceInterface;
 
@@ -14,12 +18,62 @@ public class ComfyServices(ILogger<ComfyServices> log,
     ComfyMetadata metadata, 
     ComfyGateway comfyGateway,
     IBackgroundJobs jobs, 
-    IDbConnectionFactory dbFactory)
+    IDbConnectionFactory dbFactory,
+    AgentEventsManager agentManager)
     : Service
 {
     public const string ComfyBaseUrl = "http://localhost:7860/api";
     public const string ComfyApiKey = "";
     private static long Counter;
+
+    public object Get(GetAppData request)
+    {
+        var visibleAgents = appData.GetVisibleComfyAgents();
+        var ret = new GetAppDataResponse
+        {
+            AssetCount = appData.Assets.Count,
+            WorkflowCount = appData.Workflows.Count,
+            AgentEventCounts = agentManager.GetAgentEventsCount(),
+            Agents = visibleAgents.Map(x => x.ConvertTo<AgentInfo>()),
+            QueuedAiTasks = agentManager.AiTasks.Values.Map(x => x.ConvertTo<AiTaskInfo>()),
+        };
+
+        return ret;
+    }
+
+    public object Get(DevicePool request)
+    {
+        var visibleAgents = appData.GetVisibleComfyAgents();
+        return new QueryResponse<AgentInfo>
+        {
+            Total = visibleAgents.Count,
+            Results = visibleAgents.Map(x => x.ConvertTo<AgentInfo>()),
+        };
+    }
+    
+    public async Task<object> Get(MyDevices request)
+    {
+        var userId = Request.GetClaimsPrincipal().GetUserId();
+
+        if (request.AfterModifiedDate != null)
+        {
+            var startedAt = DateTime.UtcNow;
+            var waitFor = TimeSpan.FromSeconds(60);
+            List<ComfyAgent> userAgents;
+            do
+            {
+                await Task.Delay(200);
+                userAgents = appData.GetVisibleComfyAgents(userId);
+            } while (userAgents.Count == 0 || userAgents.Max(x => x.ModifiedDate) < startedAt || DateTime.UtcNow - startedAt < waitFor);
+        }
+        
+        return new QueryResponse<OwnerAgentInfo>
+        {
+            Total = appData.ComfyAgents.Count,
+            Results = appData.GetVisibleComfyAgents(userId)
+                .Map(x => x.ConvertTo<OwnerAgentInfo>()),
+        };
+    }
     
     public async Task<object> GetAsync(GetComfyTasks request)
     {
@@ -36,126 +90,14 @@ public class ComfyServices(ILogger<ComfyServices> log,
         };
     }
 
-    public async Task<object> Any(RegisterComfyAgent request)
-    {
-        var objectInfoFile = base.Request.Files.FirstOrDefault();
-        if (objectInfoFile == null)
-            throw new ArgumentException("No object_info file uploaded.");
-
-        var json = await objectInfoFile.InputStream.ReadToEndAsync();
-        
-        var nodeDefs = ComfyMetadata.ParseNodeDefinitions(json);
-        var apiKey = (ApiKeysFeature.ApiKey)Request.GetApiKey();
-        
-        var userId = apiKey.UserId
-            ?? throw new Exception("API Key not assigned to a user");
-
-        var workflowPath = request.DeviceId.GetObjectInfoPath();
-        await appData.WriteAppDataTextFileAsync(workflowPath, json);
-
-        using var db = dbFactory.OpenDbConnection();
-        var agent = db.Single<ComfyAgent>(x => x.DeviceId == request.DeviceId);
-        if (agent != null)
-        {
-            if (agent.UserId != userId)
-                throw new Exception("Device already registered to another user");
-            agent.UserName = Request.GetClaimsPrincipal().GetUserName();
-        }
-        else
-        {
-            agent = new ComfyAgent
-            {
-                DeviceId = request.DeviceId,
-                UserId = userId,
-                CreatedDate = DateTime.UtcNow,
-            };
-        }
-
-        agent.NodeDefs = nodeDefs;
-        agent.WorkflowInfo = ComfyWorkflowParser.Parse(json, workflowPath, nodeDefs, log);
-        agent.Nodes = nodeDefs.Keys.ToList();
-        agent.UserName = apiKey.UserName;
-        agent.ApiKey = apiKey.Key;
-        agent.Enabled = true;
-        agent.OfflineDate = null;
-        agent.ModifiedDate = DateTime.UtcNow;
-
-        if (!nodeDefs.TryGetValue("CheckpointLoader", out var checkpointLoader))
-            throw new Exception("CheckpointLoader node not found");
-        agent.Checkpoints = [..checkpointLoader.GetInput("ckpt_name")?.EnumValues ?? []];
-
-        if (nodeDefs.TryGetValue("UNETLoader", out var unetLoader))
-            agent.Unets = [..unetLoader.GetInput("unet_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("VAELoader", out var vaeLoader))
-            agent.Vaes = [..vaeLoader.GetInput("vae_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("CLIPLoader", out var clipLoader))
-            agent.Clips = [..clipLoader.GetInput("clip_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("CLIPVisionLoader", out var clipVisionLoader))
-            agent.ClipVisions = [..clipVisionLoader.GetInput("clip_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("LoraLoader", out var loraLoader))
-            agent.Loras = [..loraLoader.GetInput("lora_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("UpscaleModelLoader", out var upscaleLoader))
-            agent.Upscalers = [..upscaleLoader.GetInput("model_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("ControlNetLoader", out var controlNetLoader))
-            agent.ControlNets = [..controlNetLoader.GetInput("control_net_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("StyleModelLoader", out var styleLoader))
-            agent.Stylers = [..styleLoader.GetInput("style_model_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("PhotoMakerLoader", out var photoMakerLoader))
-            agent.PhotoMakers = [..photoMakerLoader.GetInput("photomaker_model_name")?.EnumValues ?? []];
-        if (nodeDefs.TryGetValue("GLIGENLoader", out var gligenLoader))
-            agent.Gligens = [..gligenLoader.GetInput("gligen_name")?.EnumValues ?? []];
-
-        lock (Locks.AppDb)
-        {
-            db.Save(agent);
-        }
-
-        appData.RegisterComfyAgent(agent);
-        
-        var ret = new RegisterComfyAgentResponse
-        {
-            DeviceId = request.DeviceId,
-            ApiKey = Request.GetBearerToken(),
-            //Nodes = nodeDefs.Keys.ToArray(),
-            Checkpoints = agent.Checkpoints,
-            Unets = agent.Unets,
-            Vaes = agent.Vaes,
-            Loras = agent.Loras,
-            Clips = agent.Clips,
-            ClipVisions = agent.ClipVisions,
-            Controlnets = agent.ControlNets,
-            Upscalers = agent.Upscalers,
-            Stylers = agent.Stylers,
-            PhotoMakers = agent.PhotoMakers,
-            Gligens = agent.Gligens,
-            Embeddings = agent.Embeddings,
-        };
-        
-        // using var db = dbFactory.OpenDbConnection();
-        // var agent = db.Single<ComfyAgent>(x => x.DeviceId == request.DeviceId);
-        // if (agent == null)
-        // {
-        //     agent = new ComfyAgent
-        //     {
-        //         DeviceId = request.DeviceId,
-        //     };
-        // }
-        //
-        // agent.Enabled = true;
-        // agent.OfflineDate = DateTime.UtcNow;
-        // db.Save(agent);
-
-        return ret;
-    }
-    
-    public List<string> Get(GetComfyWorkflows request)
+    public List<string> Get(GetWorkflowPaths request)
     {
         var workflowsPath = appData.WebRootPath.CombineWith("data", "workflows");
         var files = Directory.GetFiles(workflowsPath, "*.json", SearchOption.AllDirectories);
 
         var allWorkflows = files.Map(x => x[workflowsPath.Length..].TrimStart('/'));
 
-        var overrideWorkflowPath = appData.ContentRootPath.CombineWith("App_Data", "overrides", "workflows");
+        var overrideWorkflowPath = appData.OverridesPath.CombineWith("workflows");
 
         if (Directory.Exists(overrideWorkflowPath))
         {
@@ -169,16 +111,55 @@ public class ComfyServices(ILogger<ComfyServices> log,
         return allWorkflows;
     }
 
-    public async Task<object> Get(GetComfyWorkflowInfo request)
+    public WorkflowVersion GetWorkflowVersion(int? versionId, int? workflowId)
     {
-        var workflowInfo = await GetWorkflowInfoAsync(request.Workflow);
-        return new GetComfyWorkflowInfoResponse
+        // If versionId is specified, get that version, otherwise get the pinned version of the workflow
+        var workflowVersion = versionId != null
+            ? Db.SingleById<WorkflowVersion>(versionId)
+            : null;
+        
+        if (workflowVersion == null && workflowId != null)
         {
-            Result = workflowInfo
+            var workflow = Db.SingleById<Workflow>(workflowId);
+            if (workflow == null)
+                throw HttpError.NotFound("Workflow not found");
+            // Should always have a pinned versionId
+            workflowVersion = workflow.PinVersionId != null 
+                ? Db.SingleById<WorkflowVersion>(workflow.PinVersionId)
+                : Db.Single(Db.From<WorkflowVersion>()
+                    .Where(x => x.ParentId == workflowId)
+                    .OrderByDescending(x => x.Id));
+        }
+        
+        if (workflowVersion == null)
+            throw HttpError.NotFound("Workflow not found");
+
+        return workflowVersion;
+    }
+
+    public object Get(GetWorkflowVersion request)
+    {
+        var workflowVersion = GetWorkflowVersion(request.VersionId, request.WorkflowId);
+        return new GetWorkflowVersionResponse
+        {
+            Result = workflowVersion
         };
     }
 
-    public async Task<ComfyWorkflowInfo> GetWorkflowInfoAsync(string path)
+    public object Get(GetWorkflowInfo request)
+    {
+        var workflowVersion = GetWorkflowVersion(request.VersionId, request.WorkflowId);
+
+        var info = workflowVersion.Info;
+        info.Id = workflowVersion.Id;
+        info.ParentId = workflowVersion.ParentId;
+        return new GetWorkflowInfoResponse
+        {
+            Result = info
+        };
+    }
+
+    public async Task<WorkflowInfo> GetWorkflowInfoAsync(string path)
     {
         path = path.Replace('\\', '/');
         var workflowJson = await GetWorkflowJsonAsync(path);
@@ -186,7 +167,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
         if (workflowJson == null)
             throw HttpError.NotFound("Workflow not found");
 
-        var workflowInfo = ComfyWorkflowParser.Parse(workflowJson, path, metadata.DefaultNodeDefinitions);
+        var workflowInfo = ComfyWorkflowParser.Parse(workflowJson.ParseAsObjectDictionary(), path, metadata.DefaultNodeDefinitions);
         return workflowInfo;
     }
 
@@ -195,9 +176,9 @@ public class ComfyServices(ILogger<ComfyServices> log,
         path = path.Replace('\\', '/');
         var workflowsPath = appData.WebRootPath.CombineWith("lib", "data", "workflows");
         if (!path.IsPathSafe(workflowsPath))
-            throw new ArgumentNullException(nameof(GetComfyWorkflowInfo.Workflow), "Invalid Workflow Path");
+            throw new ArgumentNullException("Workflow", "Invalid Workflow Path");
 
-        var overridePath = appData.ContentRootPath.CombineWith("App_Data", "overrides", "workflows").Replace('\\', '/');
+        var overridePath = appData.OverridesPath.CombineWith("workflows").Replace('\\', '/');
         string? workflowJson = null;
 
         if (File.Exists(overridePath.CombineWith(path)))
@@ -216,7 +197,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
             }
             else
             {
-                var allPaths = Get(new GetComfyWorkflows());
+                var allPaths = Get(new GetWorkflowPaths());
                 var matches = allPaths.Where(x => x.EndsWith(path)).ToList();
                 if (matches.Count == 1)
                 {
@@ -239,157 +220,533 @@ public class ComfyServices(ILogger<ComfyServices> log,
         return workflowJson;
     }
 
-    public async Task<string> Get(GetComfyApiPrompt request)
+    // public async Task<object> Get(GetComfyApiPrompt request)
+    // {
+    //     var client = comfyGateway.CreateHttpClient(ComfyBaseUrl, ComfyApiKey);
+    //     var nodeDefs = await metadata.LoadNodeDefinitionsAsync(client);
+    //     var workflowInfo = await GetWorkflowInfoAsync(request.Workflow);
+    //     
+    //     var workflowJson = await GetWorkflowJsonAsync(workflowInfo.Path)
+    //             ?? throw HttpError.NotFound("Workflow not found");
+    //     var workflow = workflowJson.ParseAsObjectDictionary();
+    //     if (request.Args?.Count > 0)
+    //     {
+    //         var result = ComfyWorkflowParser.MergeWorkflow(workflow, request.Args, workflowInfo);
+    //         workflow = result.Result;
+    //     }
+    //     var apiPrompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflow, nodeDefs, log:log);
+    //     return apiPrompt;
+    // }
+
+    public object Post(RequeueGeneration request)
     {
-        var client = comfyGateway.CreateHttpClient(ComfyBaseUrl, ComfyApiKey);
-        var nodeDefs = await metadata.LoadNodeDefinitionsAsync(client);
-        var workflowInfo = await GetWorkflowInfoAsync(request.Workflow);
+        var userId = Request.GetClaimsPrincipal().GetUserId();
+        log.LogInformation("Received RequeueGeneration from '{UserId}' to execute Generation '{Id}'",
+            userId, request.Id);
         
-        var workflowJson = await GetWorkflowJsonAsync(workflowInfo.Path)
-                           ?? throw HttpError.NotFound("Workflow not found");
-        if (request.Args?.Count > 0)
+        var gen = Db.SingleById<WorkflowGeneration>(request.Id);
+        if (gen == null)
+            throw HttpError.NotFound("Workflow generation could not be found");
+            
+        log.LogInformation("Re-queueing Workflow generation {GenerationId} for {UserId}", gen.Id, userId);
+
+        // If we're retrying an existing generation we need to regenerate the seeds
+        var genResults = gen.Result;
+        if (genResults?.Assets?.Count > 0 && gen.Args?.Count > 0)
         {
-            var result = ComfyWorkflowParser.MergeWorkflow(workflowJson, request.Args, nodeDefs);
-            workflowJson = result.Result;
+            if (gen.Args.TryGetValue("seed", out var seed))
+            {
+                gen.Args["seed"] = Random.Shared.NextInt64(0, long.MaxValue);
+            }
+            if (gen.Args.TryGetValue("noise_seed", out var noiseSeed))
+            {
+                gen.Args["noise_seed"] = Random.Shared.NextInt64(0, long.MaxValue);
+            }
+            
+            var workflowVersion = GetWorkflowVersion(Db, gen.WorkflowId, gen.VersionId);
+            var workflow = workflowVersion.Workflow;
+            var workflowInfo = workflowVersion.Info;
+            var result = ComfyWorkflowParser.MergeWorkflow(workflow, gen.Args!, workflowInfo);
+            gen.Workflow = result.Result;
+
+            var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflow, log);
+            var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflow, log);
+            var nodeDefs = appData.GetSupportedNodeDefinitions(requiredNodes, requiredAssets);
+            gen.ApiPrompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflow, nodeDefs, gen.Id, log:log);
+
+            Db.UpdateOnly(() => new WorkflowGeneration
+            {
+                Args = gen.Args,
+                Workflow = gen.Workflow,
+                ApiPrompt = gen.ApiPrompt,
+                DeviceId = null,
+                PromptId = null,
+                Error = null,
+                Result = null,
+                Status = null,
+                Outputs = null,
+                StatusUpdate = GenerationStatus.ReAddedToAgentsPool,
+                ModifiedBy = userId,
+                ModifiedDate = DateTime.UtcNow,
+            }, where: x => x.Id == request.Id);
         }
-        var apiPromptJson = ComfyConverters.ConvertWorkflowToApiPrompt(workflowJson, nodeDefs, log:log);
-        return apiPromptJson;
+        else
+        {
+            Db.UpdateOnly(() => new WorkflowGeneration
+            {
+                DeviceId = null,
+                PromptId = null,
+                Error = null,
+                Result = null,
+                Status = null,
+                Outputs = null,
+                StatusUpdate = GenerationStatus.ReAddedToAgentsPool,
+                ModifiedBy = userId,
+                ModifiedDate = DateTime.UtcNow,
+            }, where: x => x.Id == request.Id);
+        }
+        
+        agentManager.SignalGenerationRequest();
+
+        return new RequeueGenerationResponse
+        {
+            Id = gen.Id,
+        };
     }
 
-    public async Task<object> Post(QueueComfyWorkflow request)
+    private static WorkflowVersion GetWorkflowVersion(IDbConnection db, int workflowId, int? versionId=null)
     {
-        throw new NotImplementedException();
-        /*
-        var candidates = appData.ComfyAgents
-            .Where(x => x is { Enabled: true, OfflineDate: null }).ToList();
+        var q = versionId != null
+            ? db.From<WorkflowVersion>().Where(x => x.Id == versionId && x.ParentId == workflowId)
+            : db.From<WorkflowVersion>()
+                .Where(x => x.ParentId == workflowId)
+                .OrderByDescending(x => x.Id);
 
-        if (candidates.Count == 0)
-            throw new Exception("No ComfyUI providers available");
+        var workflowVersion = db.Single(q);
+        if (workflowVersion == null)
+            throw HttpError.NotFound("Workflow version not found");
+        return workflowVersion;
+    }
 
-        var randomCandidate = candidates[new Random().Next(candidates.Count)];
-        var comfyUiApiBaseUrl = randomCandidate.ApiBaseUrl.CombineWith("api");
-
-        var client = comfyGateway.CreateHttpClient(comfyUiApiBaseUrl, randomCandidate.ApiKey);
-        var nodeDefs = await metadata.LoadNodeDefinitionsAsync(client);
-        var workflowInfo = await GetWorkflowInfoAsync(request.Workflow);
-        var workflowJson = await GetWorkflowJsonAsync(workflowInfo.Path)
-            ?? throw HttpError.NotFound("Workflow not found");
-
+    public object Post(QueueWorkflow request)
+    {
+        using var db = Db;
+        var userId = Request.GetClaimsPrincipal().GetUserId();
+        log.LogInformation("Received QueueComfyWorkflow from '{UserId}' to execute workflow '{Workflow}'",
+            userId, request.WorkflowId);
+                
+        var workflowVersion = GetWorkflowVersion(db, request.WorkflowId, request.VersionId);
+        var workflow = workflowVersion.Workflow;
+        var workflowInfo = workflowVersion.Info;
         if (request.Args?.Count > 0)
         {
-            var result = ComfyWorkflowParser.MergeWorkflow(workflowJson, request.Args, nodeDefs);
-            workflowJson = result.Result;
+            var result = ComfyWorkflowParser.MergeWorkflow(workflow, request.Args!, workflowInfo);
+            workflow = result.Result;
         }
 
+        var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflow, log);
+        var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflow, log);
+        var nodeDefs = appData.GetSupportedNodeDefinitions(requiredNodes,requiredAssets);
+        
         var clientId = Guid.NewGuid().ToString("N");
-        var apiPromptJson = ComfyConverters.ConvertWorkflowToApiPrompt(workflowJson, nodeDefs, clientId, log:log);
-        log.LogInformation("Queueing ComfyUI Workflow: {ApiPromptJson}", apiPromptJson);
-        var resultJson = await comfyGateway.ExecuteApiPromptAsync(comfyUiApiBaseUrl, randomCandidate.ApiKey, apiPromptJson);
-        var resultObj = (Dictionary<string, object>)JSON.parse(resultJson);
-        var promptId = resultObj.GetValueOrDefault("prompt_id")?.ToString()
-            ?? throw new Exception("Invalid ComfyUI Queue Result");
+        var apiPrompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflow, nodeDefs, clientId, log:log);
 
-        var KeyId = (Request.GetApiKey() as ApiKeysFeature.ApiKey)?.Id ?? 0;
-        log.LogInformation("Received QueueComfyWorkflow from '{KeyId}' to execute workflow '{Workflow}' using '{Provider}'",
-            KeyId, request.Workflow, randomCandidate.ApiBaseUrl);
+        log.LogInformation("Queueing ComfyUI Workflow for {ClientId}: {ApiPromptJson}", 
+            apiPrompt.ClientId, ClientConfig.ToSystemJson(apiPrompt.Prompt));
 
-        var args = new Dictionary<string, string> {
-            [nameof(KeyId)] = $"{KeyId}",
+        var checkpoint = requiredAssets.FirstOrDefault(x => 
+            x.StartsWith("checkpoints/") || x.StartsWith("diffusion_models/") || x.StartsWith("unet/") || 
+            x.StartsWith("Stable-diffusion/", StringComparison.OrdinalIgnoreCase));
+        var lora = requiredAssets.FirstOrDefault(x => x.StartsWith("loras/", StringComparison.OrdinalIgnoreCase));
+        var embedding = requiredAssets.FirstOrDefault(x => x.StartsWith("embeddings/", StringComparison.OrdinalIgnoreCase));
+        var vae = requiredAssets.FirstOrDefault(x => x.StartsWith("vae/", StringComparison.OrdinalIgnoreCase));
+        var controlNet = requiredAssets.FirstOrDefault(x => x.StartsWith("controlnet/, StringComparison.OrdinalIgnoreCase"));
+        var upscaler = requiredAssets.FirstOrDefault(x => x.StartsWith("upscale_models/", StringComparison.OrdinalIgnoreCase));
+
+        var now = DateTime.UtcNow;
+        var generation = new WorkflowGeneration
+        {
+            Id = clientId,
+            UserId = userId,
+            ThreadId = request.ThreadId,
+            WorkflowId = request.WorkflowId,
+            VersionId = request.VersionId,
+            Description = request.Description,
+            Checkpoint = checkpoint?.RightPart('/').LastLeftPart('.'),
+            Lora = lora?.RightPart('/').LastLeftPart('.'),
+            Embedding = embedding?.RightPart('/').LastLeftPart('.'),
+            Vae = vae?.RightPart('/').LastLeftPart('.'),
+            ControlNet = controlNet?.RightPart('/').LastLeftPart('.'),
+            Upscaler = upscaler?.RightPart('/').LastLeftPart('.'),
+            Args = request.Args,
+            Workflow = workflow,
+            ApiPrompt = apiPrompt,
+            RequiredNodes = requiredNodes,
+            RequiredAssets = requiredAssets,
+            CreatedBy = userId,
+            CreatedDate = now,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+            StatusUpdate = GenerationStatus.InAgentsPool,
         };
 
-        var jobRef = jobs.EnqueueCommand<GetComfyResultsCommand>(new GetComfyResults
-        {
-            MediaProviderId = randomCandidate.Id,
-            ClientId = clientId,
-            PromptId = promptId,
-        }, new() { RefId = clientId, Args = args });
+        db.Insert(generation);
+        
+        agentManager.SignalGenerationRequest();
 
-        return new QueueComfyWorkflowResponse
+        return new QueueWorkflowResponse
         {
-            MediaProviderId = randomCandidate.Id,
-            RefId = clientId,
-            PromptId = promptId,
-            JobId = jobRef.Id,
+            Id = clientId,
         };
-     */
     }
 
-    public async Task<object> Get(GetExecutedComfyWorkflowResults request)
+    public object Get(GetGenerationApiPrompt request)
     {
-        var job = jobs.GetJobByRefId(request.RefId);
-        if (job == null)
-            return HttpError.NotFound("Workflow execution could not be found");
-        
-        var startedAt = DateTime.UtcNow;
-        var pollForSecs = request.Poll == true
-            ? 60
-            : 0;
-        
-        do
-        {
-            if (job.Completed != null)
-            {
-                return new GetExecutedComfyWorkflowResultsResponse
-                {
-                    Result = job.Completed.ResponseBody.FromJson<ComfyResult>()
-                };
-            }
-            if (job.Failed != null)
-            {
-                throw new HttpError(job.Failed.Error, HttpStatusCode.InternalServerError);
-            }
-            await Task.Delay(200);
-        } while(job.Completed == null && job.Failed == null 
-                && (DateTime.UtcNow - startedAt) < TimeSpan.FromSeconds(pollForSecs));
-        
-        throw HttpError.NotFound("Workflow execution could not be found");
+        var generation = Db.AssertGeneration(request.Id);
+        return generation.ApiPrompt;
     }
     
-    public async Task<object> Get(GetExecutedComfyWorkflowsResults request)
+    public async Task<object> Get(GetExecutedWorkflowResults request)
     {
-        if (!(request.RefIds?.Count >= 1))
-            throw new ArgumentNullException(nameof(request.RefIds));
+        var startedAt = DateTime.UtcNow;
+        var waitForSecs = request.Poll == true
+            ? 60
+            : 0;
 
-        var ret = new GetExecutedComfyWorkflowsResultsResponse
+        WorkflowResult? GetGenerationResult()
+        {
+            var generation = Db.AssertGeneration(request.Id);
+            if (generation.Result != null)
+                return generation.Result;
+            if (generation.Error != null)
+                throw new HttpError(generation.Error, HttpStatusCode.InternalServerError);
+            if (DateTime.UtcNow - generation.CreatedDate > TimeSpan.FromMinutes(10))
+                throw new HttpError(new ResponseStatus("Timeout", "Workflow execution timed out"), 
+                    HttpStatusCode.InternalServerError);
+            return null;
+        }
+
+        var generation = GetGenerationResult();
+        if (generation != null)
+            return new GetExecutedWorkflowResultsResponse { Result = generation };
+
+        var timeRemainingMs = waitForSecs > 0 
+            ? waitForSecs * 1000 - (int) (DateTime.UtcNow - startedAt).TotalMilliseconds
+            : 0;
+        await agentManager.WaitForUpdatedGenerationAsync(timeRemainingMs);
+        generation = GetGenerationResult();
+        if (generation != null)
+            return new GetExecutedWorkflowResultsResponse { Result = generation };
+
+        return new GetExecutedWorkflowResultsResponse();
+    }
+    
+    public async Task<object> Get(GetExecutedWorkflowsResults request)
+    {
+        if (request.Ids == null || request.Ids.Count == 0)
+            throw new ArgumentNullException(nameof(request.Ids));
+
+        var ret = new GetExecutedWorkflowsResultsResponse
         {
             Results = [],
             Errors = [],
         };
         
         var startedAt = DateTime.UtcNow;
-        var pollForSecs = request.Poll == true
+        var waitForSecs = request.Poll == true
             ? 60
             : 0;
 
         do
         {
-            foreach (var refId in request.RefIds)
+            var generations = Db.SelectByIds<WorkflowGeneration>(request.Ids);
+            foreach (var generation in generations)
             {
-                var job = jobs.GetJobByRefId(refId);
-                var error = job == null
-                    ? DtoUtils.CreateResponseStatus("NotFound", "Workflow execution could not be found")
-                    : null;
-                
-                error ??= job?.Failed?.Error;
+                var error = generation.Error;
                 if (error != null)
                 {
-                    ret.Errors[refId] = error;
+                    ret.Errors[generation.Id] = error;
                 }
                 else
                 {
-                    var result = job?.Completed?.ResponseBody.FromJson<ComfyResult>();
+                    var result = generation?.Result;
                     if (result != null)
                     {
-                        ret.Results[refId] = result;
+                        ret.Results[generation.Id] = result;
                     }
                 }
             }
-            await Task.Delay(200);
-        } while(ret.Results.Count == 0 && ret.Errors.Count == 0 
-                && (DateTime.UtcNow - startedAt) < TimeSpan.FromSeconds(pollForSecs));
+            // Add missing generation as error messages
+            foreach (var id in request.Ids)
+            {
+                if (generations.All(x => x.Id != id))
+                {
+                    ret.Errors[id] = new ResponseStatus(
+                        "NotFound", "Workflow execution could not be found");
+                }
+            }
+            if (ret.Results.Count > 0 || ret.Errors.Count > 0)
+                return ret;
+
+            var timeRemainingMs = waitForSecs > 0 
+                ? waitForSecs * 1000 - (int) (DateTime.UtcNow - startedAt).TotalMilliseconds
+                : 0;
+            if (timeRemainingMs <= 0)
+                break;
+            await agentManager.WaitForUpdatedGenerationAsync(timeRemainingMs);
+        } while(true);
         return ret;
     }
+
+    public async Task<object> Get(WaitForMyWorkflowGenerations request)
+    {
+        using var db = Db;
+        var lastModifiedDate = request.AfterModifiedDate;
+        if (lastModifiedDate == null)
+        {
+            lastModifiedDate = db.Scalar<DateTime>(
+                db.From<WorkflowGeneration>()
+                    .Where(x => request.Ids.Contains(x.Id))
+                    .Select(x => Sql.Max(x.ModifiedDate)));
+        }
+        
+        var q = db.From<WorkflowGeneration>()
+            .Where(x => x.ModifiedDate > lastModifiedDate);
+
+        if (request.ThreadId != null)
+        {
+            q.And(x => x.ThreadId == request.ThreadId);
+        }
+        if (request.Ids?.Count > 0)
+        {
+            q.And(x => request.Ids.Contains(x.Id));
+        }
+
+        var startedAt = DateTime.UtcNow;
+        var waitForSecs = 120;
+        do
+        {
+            var updatedGenerations = db.Select(q);
+            if (updatedGenerations.Count > 0)
+                return new QueryResponse<WorkflowGeneration> { Results = updatedGenerations };
+
+            var timeRemainingMs = waitForSecs * 1000 - (int) (DateTime.UtcNow - startedAt).TotalMilliseconds;
+            if (timeRemainingMs <= 0)
+                break;
+            await agentManager.WaitForUpdatedGenerationAsync(timeRemainingMs);
+        } while(true);
+        return new QueryResponse<WorkflowGeneration> { Results = [] };
+    }
+
+    public object Post(UpdateGenerationAsset request)
+    {
+        using var db = Db;
+        var gen = db.AssertGeneration(request.GenerationId);
+
+        var asset = gen.Result?.Assets?.Find(x => x.Url == request.AssetUrl);
+        if (asset == null)
+            throw HttpError.NotFound("Asset could not be found");
+
+        var now = DateTime.UtcNow;
+        var userId = Request.GetRequiredUserId();
+        asset.Rating = request.Rating;
+
+        db.UpdateOnly(() => new WorkflowGeneration {
+            Result = gen.Result,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        }, where:x => x.Id == request.GenerationId);
+        db.UpdateOnly(() => new Artifact
+        {
+            Rating = asset.Rating,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        }, where:x => x.Url == request.AssetUrl);
+        return new EmptyResponse();
+    }
+
+    public object Any(DeleteWorkflowGenerationArtifact request)
+    {
+        using var db = Db;
+        var gen = db.AssertGeneration(request.GenerationId);
+
+        var asset = gen.Result?.Assets?.Find(x => x.Url == request.AssetUrl);
+        if (asset == null)
+            throw HttpError.NotFound("Asset could not be found");
+
+        var now = DateTime.UtcNow;
+        var userId = Request.AssertValidUser(gen.CreatedBy);
+        
+        var artifacts = Db.Select(Db.From<Artifact>()
+            .Where(x => x.Url == request.AssetUrl));
+
+        // Can only delete file if there's only 1 reference
+        if (artifacts.Count == 1)
+        {
+            appData.DeleteArtifact(db, artifacts[0]);
+        }
+        else if (artifacts.Count > 1)
+        {
+            log.LogWarning("Found {Count} artifacts for {AssetUrl}", artifacts.Count, request.AssetUrl);
+        }
+        
+        if (gen.Result?.Assets?.Count > 0)
+        {
+            gen.Result.Assets = gen.Result.Assets.Where(x => x.Url != request.AssetUrl).ToList();
+        }
+
+        // Delete the artifact referenced by this generation
+        var deleteArtifactIds = Db.Column<int>(Db.From<Artifact>()
+            .Where(x => x.GenerationId == request.GenerationId && x.Url == request.AssetUrl).Select(x => x.Id));
+        db.DeleteByIds<Artifact>(deleteArtifactIds);
+        db.BulkInsert(deleteArtifactIds.Map(x => new DeletedRow { Table = Table.Artifact, Key = $"{x}" }));
+        
+        var hasAssets = gen.Result?.Assets?.Count > 0 &&
+                        db.Count<Artifact>(x => x.GenerationId == request.GenerationId) > 0;
+        if (!hasAssets)
+        {
+            gen.DeletedBy = userId;
+            gen.DeletedDate = now;
+        }
+
+        if (gen.DeletedDate != null)
+        {
+            db.DeleteById<WorkflowGeneration>(gen.Id);
+            db.Insert(new DeletedRow { Table = Table.WorkflowGeneration, Key = gen.Id });
+        }
+        else
+        {
+            // Remove the asset from the generation results
+            db.UpdateOnly(() => new WorkflowGeneration {
+                Result = gen.Result,
+                ModifiedBy = userId,
+                ModifiedDate = now,
+            }, where:x => x.Id == request.GenerationId);
+        }
+
+        return gen;
+    }
+
+    public object Any(PinWorkflowGenerationArtifact request)
+    {
+        using var db = Db;
+        var gen = db.AssertGeneration(request.GenerationId);
+
+        var asset = gen.Result?.Assets?.Find(x => x.Url == request.AssetUrl);
+        if (asset == null)
+            throw HttpError.NotFound("Asset could not be found");
+
+        // Move asset to the front of the list
+        if (gen.Result!.Assets!.Count > 1)
+        {
+            gen.Result.Assets.Remove(asset);
+            gen.Result.Assets.Insert(0, asset);
+        }
+        
+        var now = DateTime.UtcNow;
+        var userId = Request.AssertValidUser(gen.CreatedBy);
+
+        // Remove the asset from the generation results
+        db.UpdateOnly(() => new WorkflowGeneration {
+            Result = gen.Result,
+            PosterImage = asset.Url,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        }, where:x => x.Id == request.GenerationId);
+        
+        return new EmptyResponse();
+    }
+
+    public object Any(PublishWorkflowGeneration request)
+    {
+        using var db = Db;
+        var gen = db.AssertGeneration(request.Id);
+        var now = DateTime.UtcNow;
+        var userId = Request.AssertValidUser(gen.CreatedBy);
+
+        var genArtifacts = db.Select<Artifact>(x => x.GenerationId == request.Id);
+        if (genArtifacts.Count == 0)
+            throw HttpError.NotFound("No artifacts found for this generation");
+
+        if (gen.PosterImage == null)
+        {
+            foreach (var asset in gen.Result?.Assets ?? [])
+            {
+                var artifact = genArtifacts.Find(x => x.Url == asset.Url);
+                if (artifact != null)
+                {
+                    gen.PosterImage = asset.Url;
+                    break;
+                }
+            }
+            gen.PosterImage ??= genArtifacts[0].Url;
+        }
+        
+        var posterArtifact = genArtifacts.Find(x => x.Url == gen.PosterImage);
+        if (posterArtifact != null)
+        {
+            db.UpdateOnly(() => new Artifact {
+                PublishedBy = userId,
+                PublishedDate = now,
+                ModifiedBy = userId,
+                ModifiedDate = now,
+            }, where:x => x.Id == posterArtifact.Id);
+        }
     
+        db.UpdateOnly(() => new WorkflowGeneration {
+            PosterImage = gen.PosterImage,
+            PublishedBy = userId,
+            PublishedDate = now,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        }, where:x => x.Id == request.Id);
+        
+        return new EmptyResponse();
+    }
+
+    public object Get(GetWorkflowGeneration request)
+    {
+        var isAdmin = Request.GetClaimsPrincipal()?.IsAdmin() == true;
+        var gen = Db.AssertGeneration(request.Id);
+        if (gen.PublishedDate == null && !isAdmin)
+            throw HttpError.NotFound("Generation does not exist");
+
+        var artifacts = Db.Select<Artifact>(x => x.GenerationId == request.Id);
+        return new GetWorkflowGenerationResponse
+        {
+            Result = gen,
+            Artifacts = isAdmin 
+                ? artifacts
+                : artifacts.Where(x => x.PublishedDate != null).ToList(),
+        };
+    }
+
+    public object Any(MoveGeneration request)
+    {
+        using var db = Db;
+        var isAdmin = Request.GetClaimsPrincipal()?.IsAdmin() == true;
+        var gen = Db.AssertGeneration(request.GenerationId);
+        var userId = Request.AssertValidUser(gen.CreatedBy);
+        var now = DateTime.UtcNow;
+
+        db.UpdateOnly(() => new WorkflowGeneration {
+            ThreadId = request.ThreadId,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        }, where:x => x.Id == request.GenerationId);
+        
+        return new EmptyResponse();
+    }
+}
+
+public class ExecuteComfyApiPrompt
+{
+    public string ClientId { get; set; }
+    public string? UserId { get; set; }
+    public ApiPrompt ApiPrompt { get; set; }
+    public HashSet<string> RequiredNodes { get; set; }
+    public HashSet<string> RequiredAssets { get; set; }
+    public TimeSpan? Timeout { get; set; }
 }
 
 public class GetComfyResults
@@ -400,120 +757,3 @@ public class GetComfyResults
     public TimeSpan? Timeout { get; set; }
 }
 
-/*
-public class GetComfyResultsCommand(
-    ILogger<GetComfyResultsCommand> logger, 
-    IBackgroundJobs jobs,
-    AppData appData, 
-    AppConfig appConfig,
-    ComfyGateway comfyGateway) 
-    : AsyncCommandWithResult<GetComfyResults,ComfyResult>
-{
-    protected override async Task<ComfyResult> RunAsync(GetComfyResults request, CancellationToken token)
-    {
-        var job = Request.GetBackgroundJob();
-        var log = Request.CreateJobLogger(jobs, logger);
-
-        var mediaProvider = appData.ComfyAgents.FirstOrDefault(x => x.Id == request.MediaProviderId)
-                            ?? throw new Exception($"Comfy Agent {request.MediaProviderId} not available");
-
-        var keyId = job.Args?.TryGetValue("KeyId", out var oKeyId) == true ? oKeyId : "0";
-        var timeout = request.Timeout ?? TimeSpan.FromSeconds(5 * 60);
-        var startedAt = DateTime.UtcNow;
-        while (DateTime.UtcNow - startedAt < timeout)
-        {
-            using var client = comfyGateway.CreateHttpClient(mediaProvider.ApiBaseUrl!, mediaProvider.ApiKey);
-            var response = await client.GetAsync($"/api/history/{request.PromptId}", token);
-            response.EnsureSuccessStatusCode();
-            var historyJson = await response.Content.ReadAsStringAsync(token);
-
-            if (historyJson.IndexOf(request.PromptId, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                log.LogInformation("Prompt {Prompt} from {Url} has completed", request.PromptId, mediaProvider.ApiBaseUrl);
-                
-                var now = DateTime.UtcNow;
-                var result = ComfyConverters.ParseComfyResult(historyJson, mediaProvider.ApiBaseUrl.CombineWith("api"));
-
-                if (result.Assets?.Count > 0)
-                {
-                    log.LogInformation("Downloading {Count} Assets for {Prompt} from {Url}", 
-                        result.Assets.Count, request.PromptId, mediaProvider.ApiBaseUrl);
-                    
-                    var tasks = result.Assets.Map(async x =>
-                    {
-                        var output = new ComfyAssetOutput
-                        {
-                            NodeId = x.NodeId,
-                            Type = x.Type,
-                            FileName = x.FileName,
-                        };
-                        var url = x.Url;
-                        if (!url.StartsWith("http://") && !url.StartsWith("https://"))
-                        {
-                            url = mediaProvider.ApiBaseUrl.CombineWith(url);
-                        }
-
-                        var ext = output.FileName.LastRightPart('.');
-                        if (output.Type == AssetType.Image)
-                        {
-                            url = url.AddQueryParam("preview", "webp");
-                            ext = "webp";
-                        }
-
-                        var response = await client.GetAsync(new Uri(url), token);
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            log.LogError("Failed to download {Url}: {Message}", 
-                                url, response.ReasonPhrase ?? response.StatusCode.ToString());
-                            return output;
-                        }
-                        
-                        var imageBytes = await response.Content.ReadAsByteArrayAsync(token);
-                        var sha256 = imageBytes.ComputeSha256();
-                        output.FileName = $"{sha256}.{ext}";
-                        var relativePath = $"{now:yyyy}/{now:MM}/{now:dd}/{keyId}/{output.FileName}";
-                        var path = appConfig.ArtifactsPath.CombineWith(relativePath);
-                        Path.GetDirectoryName(path).AssertDir();
-                        await File.WriteAllBytesAsync(path, imageBytes, token);
-                        output.Url = $"/artifacts/{relativePath}";
-
-                        if (output.Type == AssetType.Image)
-                        {
-                            var info = MediaTypeNames.Image.Identify(imageBytes);
-                            output.Width = info.Width;
-                            output.Height = info.Height;
-                        }
-                        return output;
-                    });
-
-                    var allTasks = await Task.WhenAll(tasks);
-                    var completedTasks = allTasks
-                        .Where(x => x.Url != null).ToList();
-                    
-                    log.LogInformation("Downloaded {Count}/{Total} Assets for Prompt {Prompt}:\n{Urls}",
-                        completedTasks.Count, allTasks.Length, request.PromptId, 
-                        string.Join('\n',completedTasks.Map(x => appConfig.AssetsBaseUrl.CombineWith(x.Url))));
-                    
-                    result.Assets = completedTasks;
-                }
-                else if ((result.Texts?.Count ?? 0) == 0)
-                {
-                    log.LogError("Prompt {Prompt} from {Url} did not return any results", 
-                        request.PromptId, mediaProvider.ApiBaseUrl);
-
-                    throw new Exception($"Prompt {request.PromptId} from {mediaProvider.ApiBaseUrl} did not return any results");
-                }
-                
-                return result;
-            }
-            
-            await Task.Delay(1000, token);
-        }
-        
-        log.LogError("Exceeded timeout of {Seconds} seconds for Prompt {Prompt}", 
-            timeout.TotalSeconds, request.PromptId);
-        
-        throw new TimeoutException($"Exceeded timeout of {timeout.TotalSeconds} seconds for Prompt {request.PromptId}");
-    }
-}
-*/

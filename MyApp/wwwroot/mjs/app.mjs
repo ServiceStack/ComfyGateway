@@ -1,34 +1,58 @@
-import { createApp, reactive, ref, computed } from "vue"
+import { createApp, reactive, ref, computed, nextTick, defineAsyncComponent } from "vue"
 import { JsonServiceClient, $1, $$ } from "@servicestack/client"
-import ServiceStackVue from "@servicestack/vue"
-import GettingStarted from "./components/GettingStarted.mjs"
-import AuditEvents from "./components/AuditEvents.mjs"
+import ServiceStackVue, { useAuth } from "@servicestack/vue"
+import Header from "../pages/components/Header.mjs"
+import store from "../pages/lib/store.mjs"
+import { createWebHistory, createRouter } from "vue-router"
 
-import { App, usePageRoutes } from "/js/core.mjs"
-
-const app = new App()
-app.use(ServiceStackVue)
-let routes = usePageRoutes(app, {
-    page:'admin',
-    queryKeys: ('tab,provider,db,schema,table,q,page,sort,new,edit,op,skip,id,' +
-        'show,orderBy,pathInfo,tag,body,type,dialog,period,lang').split(','),
-    handlers: {
-        init(state) { console.debug('init', state) }, /*debug*/
-        nav(state) { console.debug('nav', state) } /*debug*/
-    },
+const routes = [
+    { path: '/', component: () => import('../pages/Home.mjs') },
+    { path: '/generate/:tab?/:id?', component: () => import('../pages/Generate.mjs') },
+    { path: '/images/:path?', component: () => import('../pages/Images.mjs') },
+    { path: '/gallery/:path?', component: () => import('../pages/Images.mjs') },
+    { path: '/generations/:id?', component: () => import('../pages/Generation.mjs') },
+    { path: '/comfy', component: () => import('../pages/Comfy.mjs') },
+]
+const router = createRouter({
+    history: createWebHistory(),
+    routes,
 })
 
 let client = null, Apps = []
-let store = reactive({})
 let AppData = {
     init:false
 }
 export { client, store, Apps }
 
+// const Header = defineAsyncComponent(() =>
+//     import('../pages/components/Header.mjs')
+// )
+export const App = {
+    components: {
+        Header,
+    },
+    template: `
+<div>
+    <Header :store="store" :user="user" />
+    <div>
+        <main role="main">
+            <RouterView />
+        </main>
+    </div>
+</div>
+`,
+    setup(props) {
+        const { user } = useAuth()
+        return {
+            store,
+            user,
+        }
+    }
+}
+
 /** Shared Global Components */
 const Components = {
-    GettingStarted,
-    AuditEvents,
+    App,
 }
 const CustomElements = [
     'lite-youtube'
@@ -48,6 +72,7 @@ function hasTemplate(el,component) {
  * @param component 
  * @param [props] {any} */
 export function mount(sel, component, props) {
+    console.log('mount', sel, component, props)
     if (!AppData.init) {
         init(globalThis)
     }
@@ -70,8 +95,9 @@ export function mount(sel, component, props) {
     Object.keys(Components).forEach(name => {
         app.component(name, Components[name])
     })
+    app.use(router)
     app.use(ServiceStackVue)
-    app.component('RouterLink', ServiceStackVue.component('RouterLink'))
+    //app.component('RouterLink', ServiceStackVue.component('RouterLink'))
     app.directive('hash', (el, binding) => {
         /** @param {Event} e */
         el.onclick = (e) => {
@@ -103,8 +129,18 @@ async function mountApp(el, props) {
     mount(el, module.default, props)
 }
 
+export async function configure() {
+    client ??= new JsonServiceClient()
+    await store.init(client)
+    return { 
+        client,
+        store,
+    }
+}
+
 export async function remount() {
     if (!AppData.init) {
+        await configure()
         init({ force: true })
     } else {
         mountAll({ force: true })
@@ -174,12 +210,22 @@ export function mountAll(opt) {
             console.error(`Couldn't load module ${el.getAttribute('data-module')}`, e)
         }
     })
+    $$('[v-href]').forEach(el => {
+        el.onclick = e => {
+            e.preventDefault()
+            let href = el.getAttribute('v-href')
+            if (href.startsWith('/')) {
+                router.push(href)
+            } else {
+                location.href = href
+            }
+        }
+    })
 }
 
 /** @param {any} [exports] */
 export function init(opt) {
     if (AppData.init) return
-    client = new JsonServiceClient()
     AppData = reactive(AppData)
     AppData.init = true
     mountAll(opt)
@@ -205,7 +251,7 @@ function unmount(el) {
 
 
 /* used in :::sh and :::nuget CopyContainerRenderer */
-globalThis.copy = function (e) {
+globalThis.copyText = function (e) {
     e.classList.add('copying')
     let $el = document.createElement("textarea")
     let text = (e.querySelector('code') || e.querySelector('p')).innerHTML
@@ -221,4 +267,7 @@ document.addEventListener('DOMContentLoaded', () =>
     Blazor.addEventListener('enhancedload', () => {
         remount()
         globalThis.hljs?.highlightAll()
+        // if (router.currentRoute.value?.path !== location.pathname) {
+        //     router.replace({ path: location.pathname })
+        // }
     }))
