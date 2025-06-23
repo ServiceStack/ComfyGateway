@@ -4,12 +4,13 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # Custom
+python/
 dist/
 coverage/
 blog/
 package-lock.json
 App_Data/
-MyApp/Configure.secrets.cs
+Configure.secrets.cs
 tailwindcss
 tailwindcss.exe
 
