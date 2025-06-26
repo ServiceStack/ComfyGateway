@@ -9,7 +9,7 @@ using Thread = MyApp.ServiceModel.Thread;
 
 namespace MyApp.ServiceInterface;
 
-public class ThreadServices(IAutoQueryDb autoQuery, IBackgroundJobs jobs) : Service
+public class ThreadServices(IAutoQueryDb autoQuery, IBackgroundJobs jobs, AppConfig appConfig) : Service
 {
     [FromServices]
     public SmtpConfig? SmtpConfig { get; set; }
@@ -73,7 +73,7 @@ public class ThreadServices(IAutoQueryDb autoQuery, IBackgroundJobs jobs) : Serv
     //     Db.UpdateOnly(() => new Thread { LikesCount = threadLikes + 1 }, where: x => x.Id == threadId);
     // }
 
-    public object Post(CreateThread request)
+    public Thread Post(CreateThread request)
     {
         var thread = new Thread
         {
@@ -132,7 +132,41 @@ public class ThreadServices(IAutoQueryDb autoQuery, IBackgroundJobs jobs) : Serv
     //     RefreshVotes(request.CommentId);
     // }
 
-    public object Any(CreateComment request)
+    public object Post(CreateGenerationComment request)
+    {
+        var gen = Db.AssertGeneration(request.GenerationId);
+        if (gen.PublicThreadId == null)
+        {
+            var caption = Db.Scalar<string?>(Db.From<Artifact>()
+                .Where(x => x.GenerationId == request.GenerationId && x.Caption != null)
+                .Select(x => x.Caption)
+                .OrderBy(x => x.Id));
+
+            var thread = Post(new CreateThread
+            {
+                Url = appConfig.PublicBaseUrl.CombineWith($"/generations/{gen.Id}"),
+                Description = caption 
+                    ?? gen.Description.SubstringWithEllipsis(0,120) 
+                    ?? $"{appConfig.AppName} Generation",
+                RefIdStr = gen.Id,
+            });
+            gen.PublicThreadId = thread.Id;
+            Db.UpdateOnly(() => new WorkflowGeneration
+            {
+                PublicThreadId = thread.Id,
+                ModifiedBy = Request.GetRequiredUserId(),
+                ModifiedDate = DateTime.UtcNow,
+            }, where: x => x.Id == request.GenerationId);
+        }
+
+        return Post(new CreateComment {
+            ThreadId = gen.PublicThreadId.Value,
+            ReplyId = request.ReplyId,
+            Content = request.Content,
+        });
+    }
+    
+    public object Post(CreateComment request)
     {
         var ret = autoQuery.Create(request, base.Request);
         if (SmtpConfig?.NotificationsEmail == null && request.ReplyId == null)

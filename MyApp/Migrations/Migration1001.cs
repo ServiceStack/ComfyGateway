@@ -12,6 +12,7 @@ public class Migration1001 : MigrationBase
         [Index]
         public string DeviceId { get; set; }
         public int Version { get; set; }
+        public string? ComfyVersion { get; set; }
         [Index]
         public string UserId { get; set; }
         public string? UserName { get; set; }
@@ -53,6 +54,11 @@ public class Migration1001 : MigrationBase
         public List<string>? RequireNodes { get; set; }
         [PgSqlJsonB]
         public List<string>? RequireModels { get; set; }
+
+        public string? Status { get; set; }
+        public string? Logs { get; set; }
+        public ResponseStatus? Error { get; set; }
+        public DateTime? DevicePool { get; set; }
     }
     
     public class Asset

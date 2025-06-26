@@ -26,7 +26,11 @@ public class ConfigureDb : IHostingStartup
 
             services.AddOrmLite(options => options.UsePostgres(connectionString, dialect => {
                     //dialect.NamingStrategy = new OrmLiteNamingStrategyBase();
-                }));
+                })
+                .ConfigureJson(json => {
+                    // json.DefaultSerializer = JsonSerializerType.SystemJson;
+                })
+            );
             
             // $ dotnet ef migrations add CreateIdentitySchema
             // $ dotnet ef database update

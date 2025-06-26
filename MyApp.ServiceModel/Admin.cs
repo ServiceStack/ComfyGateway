@@ -293,3 +293,49 @@ public class GetAiChatResponse
     public OpenAiChatResponse? Response { get; set; }
     public ResponseStatus? ResponseStatus { get; set; }
 }
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class PinToWorkflowVersion : IPost, IReturn<EmptyResponse>
+{
+    [ValidateGreaterThan(0)]
+    public int VersionId { get; set; }
+    [ValidateNotEmpty]
+    public string PosterImage { get; set; }
+}
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class FeatureArtifact : IPost, IReturn<Artifact>
+{
+    [ValidateGreaterThan(0)]
+    public int ArtifactId { get; set; }
+}
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class UnFeatureArtifact : IPost, IReturn<Artifact>
+{
+    [ValidateGreaterThan(0)]
+    public int ArtifactId { get; set; }
+}
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class UpdateWorkflowVersion : IPost, IReturn<UpdateWorkflowVersionResponse>
+{
+    [ValidateGreaterThan(0)]
+    [Input(Type="lookup", Options = "{refId:'id',model:'WorkflowVersion',refLabel:'Name'}")]
+    public int VersionId { get; set; }
+    [Input(Type = "file")]
+    public string? Workflow { get; set; }
+}
+public class UpdateWorkflowVersionResponse
+{
+    public int VersionId { get; set; }
+    public int Updated { get; set; }
+    public List<string> Nodes { get; set; }
+    public List<string> Assets { get; set; }
+    public WorkflowInfo Info { get; set; }
+    public ResponseStatus? ResponseStatus { get; set; }
+}

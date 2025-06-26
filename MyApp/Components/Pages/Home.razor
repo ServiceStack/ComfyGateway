@@ -31,9 +31,17 @@
                     @AppData.Config.FeaturedSubTitle
                 </p>
             }
+            <div>
+                <a href="/images" class="ml-2 text-sm text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400">
+                    explore all images
+                    <span>&rarr;</span>
+                </a>
+            </div>
         </div>
     </div>
 </div>
+
+<div data-component="pages/components/ArtifactMenuHome.mjs"></div>
 
 <!-- Featured Artifacts Grid -->
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
@@ -47,9 +55,9 @@
                     <!-- Image Container with dynamic aspect ratio -->
                     <a href="/generations/@artifact.GenerationId">
                         <div class="overflow-hidden bg-gray-100 dark:bg-gray-700" style="aspect-ratio: @GetAspectRatio(artifact)">
-                            <img src="@artifact.Url"
+                            <img src="@artifact.Url" data-id="@artifact.Id"
                                  alt="Generated artifact"
-                                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                                 class="artifact w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
                                  loading="lazy" />
                         </div>
                     </a>
@@ -84,18 +92,23 @@
                                 <svg class="size-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"></path></svg>
                             </a>
 
-                            <span>
-                                @(AppData.GetWorkflow(artifact.WorkflowId)?.Name)
-                            </span>
+                            @if (AppData.GetWorkflow(artifact.WorkflowId) != null)
+                            {
+                                <a href="/images?versionId=@artifact.VersionId" 
+                                   class="text-gray-600 dark:text-gray-300 hover:text-sky-500 dark:hover:text-sky-400">
+                                    @AppData.GetWorkflow(artifact.WorkflowId)!.Name
+                                </a>
+                            }
                         </div>
 
                         <!-- Tags -->
                         @if (artifact.Tags?.Any() == true)
                         {
-                            <div class="flex flex-wrap gap-1 mt-2">
+                            <div class="flex flex-wrap gap-1 mt-2 items-center">
                                 @foreach (var tag in artifact.Tags.Take(3))
                                 {
-                                    <a href="/images?tag=@tag.Key" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                    <a href="/images?tag=@tag.Key" 
+                                       class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600">
                                         @tag.Key
                                     </a>
                                 }
@@ -130,10 +143,18 @@
 </div>
 
 <script type="module">
-import { store } from "/mjs/app.mjs"
+import { store, events } from "/mjs/app.mjs"
 const artifacts = @BlazorHtml.Raw(FeaturedArtifacts.ToJson());
 await store.openAppDb()
 await store.saveArtifacts(artifacts)
+
+document.querySelectorAll('img.artifact').forEach(img => {
+    img.onerror = function (e) { this.src=store.getArtifactImageErrorUrl(Number(this.dataset.id), null, 300) }
+    img.oncontextmenu = function (e) {
+        e.preventDefault()
+        events.publish('showArtifactMenu', { artifactId:Number(this.dataset.id), event:e })
+    }
+})
 </script>
 
 @code {

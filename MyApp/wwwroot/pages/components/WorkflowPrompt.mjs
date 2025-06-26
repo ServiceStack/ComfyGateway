@@ -1,6 +1,6 @@
 import { ref, computed } from "vue"
 import { formatName } from "./WorkflowsViewer.mjs"
-import { toJsonObject, toJsonArray, acceptedImages, acceptedVideos, acceptedAudios } from "../lib/utils.mjs"
+import { WorkflowGroups, toJsonObject, toJsonArray, acceptedImages, acceptedVideos, acceptedAudios } from "../lib/utils.mjs"
 import FileUpload from "./FileUpload.mjs"
 
 export default {
@@ -12,6 +12,20 @@ export default {
 <div class="relative w-full mb-8">
     <div v-if="!selectedWorkflow">
         Select a Workflow
+        
+        <div class="mt-4" v-for="group of WorkflowGroups">
+            <h4 class="w-full pl-2 text-gray-500 dark:text-gray-400 uppercase pt-2 text-sm leading-6 font-semibold">
+                {{group.name}}
+            </h4>
+            <div v-for="category of group.categories">
+                <RouterLink :to="{ query: { category } }" 
+                    :class="($route.query.category || 'Text to Image') == category ? 'text-indigo-600 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-200'"
+                    class="pl-4 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-900 group flex gap-x-3 rounded-md p-2 text-sm leading-6 justify-between font-semibold"
+                    >
+                    {{category}}
+                </RouterLink>
+            </div>
+        </div>
     </div>
     <div v-else>
         <!-- Text prompt input -->
@@ -29,7 +43,7 @@ export default {
             </div>
             <div v-if="selectedWorkflowInfo">
                 <!-- Controls Row -->
-                <div class="mt-2 flex flex-col lg:flex-row justify-center gap-2">
+                <div class="mt-2 w-full flex flex-col lg:flex-row justify-center gap-2">
                     <!-- Aspect Ratio Controls -->
                     <div v-if="hasInput('width','height')" class="inline-flex items-center lg:rounded-md lg:shadow-sm" role="group" aria-label="Aspect ratio selection">
                         <!-- Square aspect ratio -->
@@ -101,13 +115,13 @@ export default {
                             min="0"
                             max="1"
                             step="0.01"
-                            class="w-28 sm:w-32 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                            class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
                         >
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300 w-6 text-right">{{ workflowArgs.denoise }}</span>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300 w-2 text-right">{{ workflowArgs.denoise }}</span>
                     </div>
 
                     <!-- CFG Input with Up/Down Controls -->
-                    <div v-if="hasInput('cfg')" class="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-sm">
+                    <div v-if="hasInput('cfg')" class="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-sm">
                         <label for="cfg-control" class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap cursor-help"
                             title="The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality.">
                             CFG
@@ -323,6 +337,7 @@ export default {
             setArgs,
             setPrefs,
             resetPositivePrompt,
+            WorkflowGroups,
         }
     }
 }

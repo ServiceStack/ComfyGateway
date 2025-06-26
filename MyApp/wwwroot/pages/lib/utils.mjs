@@ -17,10 +17,33 @@ export const AllCategories = [
     "game character", "sci-fi"
 ]
 
+export const WorkflowGroups = [
+    {
+        name: 'Image',
+        categories: [
+            'Text to Image', 
+            'Image to Image', 
+            // 'Image to Text',
+        ]
+    },
+    {
+        name: 'Audio',
+        categories: ['Audio to Text', 'Text to Audio']
+    },
+    {
+        name: 'Video',
+        categories: [
+            'Image to Video', 
+            // 'Video to Text'
+        ]
+    }
+]
+
 const reactionEmojis = ["👍","❤","😂","😢"]
-export function reactionCounts(reactions) {
+export function reactionCounts(reactions, emojis=null) {
     const ret = {}
-    reactionEmojis.forEach(emoji => {
+    emojis ??= reactionEmojis
+    emojis.forEach(emoji => {
         ret[emoji] = reactions[emoji] || 0
     })
     return ret
@@ -49,6 +72,46 @@ export function getRandomInt(min, max) {
     min = Math.ceil(min);
     max = Math.floor(max);
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+export function getRatingDisplay(artifact) {
+    // Check for direct rating first, then predicted rating
+    if (artifact.rating) {
+        // Convert rating enum value to string
+        const ratingMap = { 1: 'PG', 2: 'PG13', 4: 'M', 8: 'R', 16: 'X', 32: 'XXX' }
+        const ret = ratingMap[artifact.rating] || artifact.rating.toString()
+        return ret === 'PG13' ? 'PG-13' : ret
+    }
+    return artifact.ratings?.predictedRating || null
+}
+
+export function isAdultRating(rating) {
+    return ['R', 'X', 'XXX'].includes(rating)
+}
+
+export function getRatingColorClass(rating) {
+    if (['R', 'X', 'XXX'].includes(rating)) {
+        // Adult ratings - Red
+        return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 ring-red-600/40 dark:ring-red-400/50'
+    } else if (rating === 'M') {
+        // Mature rating - Orange/Amber
+        return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 ring-amber-600/40 dark:ring-amber-400/50'
+    } else {
+        // Safe ratings (PG, PG13) - Green
+        return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 ring-green-600/40 dark:ring-green-400/50'
+    }
+}
+
+export function getRatingDescription(rating) {
+    const descriptions = {
+        'PG': 'Safe for work, family friendly content',
+        'PG13': 'Teen appropriate content, mildly suggestive',
+        'M': 'Mature content, strong language, suggestive content',
+        'R': 'R-rated adult themes, strong language, partial nudity',
+        'X': 'NSFW, Explicit sexual content, graphic nudity',
+        'XXX': 'NSFW, Extreme explicit content, hardcore pornography'
+    }
+    return descriptions[rating] || 'Content rating'
 }
 
 export function wordList(items) {

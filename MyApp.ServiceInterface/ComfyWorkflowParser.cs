@@ -167,7 +167,7 @@ public class ComfyWorkflowParser
         return ret;
     }
 
-    public static WorkflowInfo Parse(Dictionary<string,object?> workflow, string workflowPath, Dictionary<string, NodeInfo> nodeDefs, ILogger? log = null)
+    public static WorkflowInfo Parse(Dictionary<string,object?> workflow, string workflowName, Dictionary<string, NodeInfo> nodeDefs, ILogger? log = null)
     {
         log ??= NullLogger.Instance;
         if (workflow["nodes"] is not List<object> nodesObj || workflow["links"] is not List<object> links)
@@ -275,8 +275,7 @@ public class ComfyWorkflowParser
         
         var workflowInfo = new WorkflowInfo
         {
-            Name = StringFormatters.FormatName(workflowPath.LastRightPart('/').WithoutExtension()),
-            Path = workflowPath,
+            Name = workflowName,
             Type = workflowType.Value,
             Input = inputSource.Value,
             Output = outputSource.Value,

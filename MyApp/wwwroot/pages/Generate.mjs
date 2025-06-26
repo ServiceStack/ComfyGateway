@@ -6,7 +6,6 @@ import {
     QueueWorkflow, WaitForMyWorkflowGenerations, MyWorkflowGenerations, RequeueGeneration
 } from "../mjs/dtos.mjs"
 import { toJsonObject, toJsonArray, getRandomInt } from "./lib/utils.mjs"
-import { Tables } from "./lib/store.mjs"
 import WorkflowSelector from "./components/WorkflowSelector.mjs"
 import WorkflowPrompt from "./components/WorkflowPrompt.mjs"
 import AssetGallery from "./components/AssetGallery.mjs"
@@ -36,7 +35,8 @@ export default {
         </div>
     </div>
 </div>
-<div v-else class="grid w-full" style="min-height:calc(100vh - 56px)" :style="(store.threadCount && showRecents ? 'grid-template-columns: 25rem 1fr 15rem' : store.threadCount ? 'grid-template-columns: 25rem 1fr auto' : 'grid-template-columns: 25rem 1fr')">
+<div v-else class="grid w-full" style="min-height:calc(100vh - 56px)" 
+    :style="(store.threadCount && showRecents ? 'grid-template-columns: 22rem 1fr 15rem' : store.threadCount ? 'grid-template-columns: 22rem 1fr auto' : 'grid-template-columns: 25rem 1fr')">
     <!-- Left Panel -->
     <div class="py-2 px-2 border-r dark:border-gray-700 overflow-y-auto">
         <div v-if="selectedWorkflow" class="mb-2 flex justify-between">
@@ -148,7 +148,7 @@ export default {
             }
         }
 
-        // Select a workflow
+        // Select a Workflow
         async function selectWorkflow(workflow, args=null) {
             console.log('selectWorkflow', workflow, args, router?.currentRoute.value)
 

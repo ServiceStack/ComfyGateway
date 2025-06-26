@@ -7,11 +7,12 @@ import RatingsDialog from "./components/RatingsDialog.mjs"
 import VisibilityIcon from "./components/VisibilityIcon.mjs"
 import ArtifactMenu from "./components/ArtifactMenu.mjs"
 import ArtifactReactions from "./components/ArtifactReactions.mjs"
+import RatingsBadge from "./components/RatingsBadge.mjs"
 
 export const ArtifactImage = {
     template:`<div v-if="artifact" class="overflow-hidden" :style="store.getBackgroundStyle(artifact) + ';' + imageStyle">
       <img :alt="artifact.prompt" :width="width" :height="height" :class="imageClass"
-           :src="imageSrc" :loading="loading || 'lazy'" @error="handleImageError">
+           :src="imageSrc" :loading="loading || 'lazy'" @error="imageSrc=store.getArtifactImageErrorUrl(artifact.id, null, minSize)">
   </div>`,
     props: {
         /** @type {import('vue').PropType<Artifact>} */
@@ -44,16 +45,8 @@ export const ArtifactImage = {
             : (props.artifact.height > props.artifact.width
                 ? (props.artifact.height / props.artifact.width) * props.minSize
                 : props.minSize))
-
-        function handleImageError(event) {
-            if (!hasError.value) {
-                hasError.value = true
-                imageSrc.value = store.getArtifactImageErrorUrl(props.artifact, null, props.minSize)
-                console.warn('Image failed to load:', store.getPublicUrl(props.artifact, props.minSize))
-            }
-        }
-
-        return { store, width, height, imageSrc, handleImageError }
+        
+        return { store, width, height, imageSrc }
     }
 }
 
@@ -64,14 +57,27 @@ export default {
         RatingsDialog,
         VisibilityIcon,
         ArtifactReactions,
+        RatingsBadge,
     },
     template:`
         <div class="min-h-screen bg-white dark:bg-gray-900">
             <!-- Header -->
             <div class="pb-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <div class="px-2">
+                <div class="px-2 flex justify-between items-center">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <span v-if="store.workflows.find(x => x.version.id == $route.query.version)">
+                                {{store.workflows.find(x => x.version.id == $route.query.version)?.name}}
+                                Gallery
+                            </span>
+                            <span v-else-if="$route.query.similar">similar images</span>
+                            <span v-else-if="$route.query.user">user images</span>
+                            <span v-else-if="$route.query.category">{{$route.query.category}} images</span>
+                            <span v-else>images</span>
+                        </h1>
+                    </div>
                     <!-- Search and Filters -->
-                    <div class="flex flex-col sm:flex-row gap-2 justify-end items-center">
+                    <div class="flex flex-col sm:flex-row gap-2 items-center">
                         <div class="flex flex-col sm:flex-row gap-2 items-center">
                             <div class="relative">
                                 <input v-model="txtSearch"
@@ -91,14 +97,13 @@ export default {
                         <select v-model="sortBy"
                             class="border border-gray-300 dark:border-gray-600 rounded-lg
                                    bg-white dark:bg-gray-800 text-gray-900 dark:text-white
-                                   focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        >
-                            <option value="createdDate">Newest First</option>
+                                   focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            <option value="-createdDate">Newest First</option>
                             <option value="-reactionsCount">Most Reactions</option>
-                            <option value="-createdDate">Oldest First</option>
-                            <option value="modifiedDate">Recently Modified</option>
-                            <option value="width">Landscape First</option>
-                            <option value="height">Portrait First</option>
+                            <option value="createdDate">Oldest First</option>
+                            <option value="-modifiedDate">Recently Modified</option>
+                            <option value="-width">Landscape First</option>
+                            <option value="-height">Portrait First</option>
                         </select>
                     </div>
                 </div>
@@ -115,10 +120,10 @@ export default {
                         ]">
                             <!-- All Categories Pill -->
                             <button type="button"
-                                @click="$router.push({ path: '/images', query: { ...route.query, category: undefined, tag: undefined, similar: undefined } })"
+                                @click="$router.push({ path: '/images', query: { ...route.query, version:undefined, category:undefined, tag:undefined, similar:undefined } })"
                                 :class="[
                                     'whitespace-nowrap px-2 rounded-sm font-normal text-sm transition-all duration-200',
-                                    !route.query.category && !route.query.tag && !route.query.similar
+                                    !route.query.version && !route.query.category && !route.query.tag && !route.query.similar
                                         ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700 border border-indigo-400 dark:border-indigo-500'
                                         : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
                                 ]"
@@ -193,7 +198,7 @@ export default {
                     >
                         <div class="relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 bg-gray-100 dark:bg-gray-800" 
                             title="Ctrl+Click to View Post" @click.ctrl.prevent="$router.push({ path:'/generations/' + image.generationId })">
-                            <div v-if="isAdmin() && image.rating" class="absolute top-1 left-1 flex items-center inline-flex rounded-md bg-gray-200/50 dark:bg-gray-700/50 px-1 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-700/10">
+                            <div v-if="store.isAdmin && image.rating" class="absolute top-1 left-1 flex items-center inline-flex rounded-md bg-gray-200/50 dark:bg-gray-700/50 px-1 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-700/10">
                                 {{formatRating(image.rating)}}
                             </div>
                             <ArtifactImage
@@ -203,7 +208,7 @@ export default {
                                 loading="lazy"                                
                             />
                     
-                            <div class="my-1 mx-2 flex flex-wrap justify-between gap-1 text-sm group-hover:opacity-0 transition-all duration-200">
+                            <div class="p-1 flex flex-wrap justify-between text-sm group-hover:opacity-0 transition-all duration-200">
                                 <!-- Cosmetic only -->
                                 <ArtifactReactions :artifact="image" @changed="image.reactions = $event.reactions" />
                             </div>
@@ -222,8 +227,8 @@ export default {
 
                             <!-- Overlay -->
                             <div class="absolute bottom-0 left-0 right-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                <div class="pt-4 mb-1.5 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 w-full">
-                                    <div class="px-4 flex items-center justify-between">
+                                <div class="mb-1.5 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 w-full">
+                                    <div class="p-2 flex items-center justify-between">
                                         <div>
                                             <p class="text-sm font-medium">{{ image.width }} × {{ image.height }}</p>
                                             <p v-if="image.rating" class="text-xs opacity-75">{{ formatRating(image.rating) }}</p>
@@ -238,7 +243,7 @@ export default {
                                             </p>
                                         </div>
                                     </div>
-                                    <ArtifactReactions :artifact="image" @changed="image.reactions = $event.reactions" />
+                                    <ArtifactReactions class="px-0.5" :artifact="image" @changed="image.reactions = $event.reactions" />
                                 </div>
                             </div>
                         </div>
@@ -324,9 +329,16 @@ export default {
                     <div class="absolute bottom-4 left-4 right-4 bg-black/50 text-white p-4 rounded-b-lg">
                         <div class="flex justify-between items-start">
                             <div class="min-w-24">
-                                <p class="font-medium">{{ selectedImage.width }} × {{ selectedImage.height }}</p>
-                                <p v-if="selectedImage.rating" class="text-sm opacity-75">Rating: {{ formatRating(selectedImage.rating) }}</p>
-                                <div class="flex items-center">
+                                <div class="whitespace-nowrap">
+                                    <RatingsBadge class="-ml-1" :artifact="selectedImage" />
+                                    <RouterLink :to="{ path:'/generate/feed', query: { 'new':'', remix: selectedImage.generationId } }"
+                                            class="ml-1 rounded inline-flex items-center gap-1 px-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-sm font-medium shadow transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                                            title="Remix this generation with the same settings">
+                                        remix
+                                    </RouterLink>
+                                </div>
+                                <p class="mt-2 font-medium text-sm">{{ selectedImage.width }} × {{ selectedImage.height }}</p>
+                                <div class="mt-1 flex items-center">
                                     <RouterLink :to="{ path:'/generations/' + selectedImage.generationId }" 
                                         class="text-sm" 
                                         title="View Post">
@@ -374,7 +386,7 @@ export default {
         const loading = ref(true)
         const error = ref(null)
         const txtSearch = ref(route.query.search ?? '')
-        const sortBy = ref("createdDate")
+        const sortBy = ref(store.prefs.sortBy ?? '-createdDate')
         const selectedImage = ref(null)
         const selectedIndex = ref(-1)
         const currentPage = ref(0)
@@ -456,6 +468,10 @@ export default {
                     hasMore.value = true
                 }
 
+                if (sortBy.value) {
+                    store.setPrefs({ sortBy: sortBy.value })
+                } 
+                
                 const request = new QueryArtifacts({
                     skip: currentPage.value * pageSize.value,
                     take: pageSize.value,
@@ -463,6 +479,8 @@ export default {
                     ratings: store.selectedRatings,
                     category: route.query.category,
                     tag: route.query.tag,
+                    versionId: route.query.version,
+                    userId: route.query.user,
                     similar: route.query.similar,
                     orderBy: sortBy.value
                 })

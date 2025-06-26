@@ -1,19 +1,7 @@
 import { ref, computed, onMounted, watch } from "vue"
+import { WorkflowGroups } from "../lib/utils.mjs"
 
-const majorGroups = [
-    {
-        name: 'Image',
-        categories: ['Text to Image', 'Image to Image', 'Image to Text']
-    },
-    {
-        name: 'Audio',
-        categories: ['Audio to Text', 'Text to Audio']
-    },
-    {
-        name: 'Video',
-        categories: ['Image to Video', 'Video to Text']
-    }
-]
+const majorGroups = WorkflowGroups
 
 const replaceWords = {
     'sdxl': 'SDXL',

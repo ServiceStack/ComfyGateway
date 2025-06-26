@@ -75,6 +75,7 @@ public class RegisterComfyAgent : IPost, IReturn<RegisterComfyAgentResponse>
     [ValidateNotEmpty, ValidateExactLength(32)]
     public string DeviceId { get; set; }
     public int Version { get; set; }
+    public string ComfyVersion { get; set; }
     public List<string> Workflows { get; set; }
     public int QueueCount { get; set; }
     public List<GpuInfo>? Gpus { get; set; }

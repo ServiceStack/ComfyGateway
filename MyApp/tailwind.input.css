@@ -83,6 +83,10 @@
         margin-right: 0.125em;
         font-style: normal;
     }
+    .dark em {
+        color: #93c5fd;
+        background-color: #1e3a8a;
+    }
 
     /* @tailwindcss/forms css */
     [type='text'],[type='email'],[type='url'],[type='password'],[type='number'],[type='date'],[type='datetime-local'],[type='month'],[type='week'],[type='search'],[type='tel'],[type='time'],[type='color'],[multiple],textarea,select

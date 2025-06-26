@@ -1,5 +1,5 @@
 /* Options:
-Date: 2025-06-22 15:39:14
+Date: 2025-06-27 01:27:10
 Version: 8.81
 Tip: To override a DTO option, remove "//" prefix before updating
 BaseUrl: https://localhost:5001
@@ -150,7 +150,7 @@ export class ResponseStatus {
     meta;
 }
 export class WorkflowGeneration extends AuditBase {
-    /** @param {{id?:string,userId?:string,threadId?:number,workflowId?:number,versionId?:number,output?:AssetType,description?:string,checkpoint?:string,lora?:string,embedding?:string,vae?:string,controlNet?:string,upscaler?:string,posterImage?:string,args?:{ [index:string]: Object; },requiredNodes?:string[],requiredAssets?:string[],deviceId?:string,promptId?:string,result?:WorkflowResult,error?:ResponseStatus,credits?:number,statusUpdate?:string,publishedBy?:string,publishedDate?:string,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:string,userId?:string,threadId?:number,workflowId?:number,versionId?:number,output?:AssetType,description?:string,checkpoint?:string,lora?:string,embedding?:string,vae?:string,controlNet?:string,upscaler?:string,posterImage?:string,args?:{ [index:string]: Object; },requiredNodes?:string[],requiredAssets?:string[],deviceId?:string,promptId?:string,result?:WorkflowResult,error?:ResponseStatus,credits?:number,statusUpdate?:string,publishedBy?:string,publishedDate?:string,publicThreadId?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {string} */
     id;
@@ -202,6 +202,8 @@ export class WorkflowGeneration extends AuditBase {
     publishedBy;
     /** @type {?string} */
     publishedDate;
+    /** @type {?number} */
+    publicThreadId;
 }
 export class GpuInfo {
     /** @param {{index?:number,name?:string,total?:number,free?:number,used?:number}} [init] */
@@ -443,7 +445,7 @@ export var ReportTag;
     ReportTag["OtherConcern"] = "OtherConcern"
 })(ReportTag || (ReportTag = {}));
 export class Thread extends AuditBase {
-    /** @param {{id?:number,url?:string,description?:string,externalRef?:string,viewCount?:number,likesCount?:number,commentsCount?:number,args?:{ [index:string]: Object; },refId?:number,refIdStr?:string,closedDate?:string,reactions?:{ [index:string]: number; },createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,url?:string,description?:string,externalRef?:string,viewCount?:number,likesCount?:number,commentsCount?:number,args?:{ [index:string]: Object; },refId?:number,refIdStr?:string,closedDate?:string,reactions?:{ [index:string]: number; },reactionsCount?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -469,9 +471,11 @@ export class Thread extends AuditBase {
     closedDate;
     /** @type {{ [index:string]: number; }} */
     reactions = {};
+    /** @type {number} */
+    reactionsCount;
 }
 export class Comment extends AuditBase {
-    /** @param {{id?:number,threadId?:number,replyId?:number,content?:string,upVotes?:number,downVotes?:number,votes?:number,flagReason?:string,notes?:string,userId?:string,reactions?:{ [index:string]: number; },createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,threadId?:number,replyId?:number,content?:string,flagReason?:string,notes?:string,userId?:string,reactions?:{ [index:string]: number; },reactionsCount?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -481,12 +485,6 @@ export class Comment extends AuditBase {
     replyId;
     /** @type {string} */
     content;
-    /** @type {number} */
-    upVotes;
-    /** @type {number} */
-    downVotes;
-    /** @type {number} */
-    votes;
     /** @type {?string} */
     flagReason;
     /** @type {?string} */
@@ -495,6 +493,8 @@ export class Comment extends AuditBase {
     userId;
     /** @type {{ [index:string]: number; }} */
     reactions = {};
+    /** @type {number} */
+    reactionsCount;
 }
 /** @typedef {'Offensive'|'Spam'|'Nudity'|'Illegal'|'Other'} */
 export var PostReport;
@@ -632,7 +632,7 @@ export class Booking extends AuditBase {
     employee;
 }
 export class Workflow extends AuditBase {
-    /** @param {{id?:number,category?:string,base?:string,name?:string,slug?:string,path?:string,description?:string,pinVersionId?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,category?:string,base?:string,name?:string,slug?:string,path?:string,description?:string,pinVersionId?:number,threadId?:number,tags?:string[],createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -650,6 +650,10 @@ export class Workflow extends AuditBase {
     description;
     /** @type {?number} */
     pinVersionId;
+    /** @type {?number} */
+    threadId;
+    /** @type {?string[]} */
+    tags;
 }
 /** @typedef {'TextToImage'|'ImageToImage'|'ImageToText'|'TextToAudio'|'TextToVideo'|'TextTo3D'|'AudioToText'|'VideoToText'|'ImageToVideo'} */
 export var ComfyWorkflowType;
@@ -758,7 +762,7 @@ export class ComfyInputDefinition {
     comboValues;
 }
 export class WorkflowInfo {
-    /** @param {{id?:number,parentId?:number,name?:string,path?:string,type?:ComfyWorkflowType,input?:ComfyPrimarySource,output?:ComfyPrimarySource,inputs?:ComfyInputDefinition[]}} [init] */
+    /** @param {{id?:number,parentId?:number,name?:string,type?:ComfyWorkflowType,input?:ComfyPrimarySource,output?:ComfyPrimarySource,inputs?:ComfyInputDefinition[]}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -766,8 +770,6 @@ export class WorkflowInfo {
     parentId;
     /** @type {string} */
     name;
-    /** @type {string} */
-    path;
     /** @type {ComfyWorkflowType} */
     type;
     /** @type {ComfyPrimarySource} */
@@ -778,7 +780,7 @@ export class WorkflowInfo {
     inputs = [];
 }
 export class WorkflowVersion extends AuditBase {
-    /** @param {{id?:number,parentId?:number,version?:string,workflow?:{ [index:string]: Object; },info?:WorkflowInfo,nodes?:string[],assets?:string[],createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,parentId?:number,version?:string,name?:string,workflow?:{ [index:string]: Object; },info?:WorkflowInfo,nodes?:string[],assets?:string[],posterImage?:string,reactions?:{ [index:string]: number; },reactionsCount?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -786,6 +788,8 @@ export class WorkflowVersion extends AuditBase {
     parentId;
     /** @type {string} */
     version;
+    /** @type {?string} */
+    name;
     /** @type {{ [index:string]: Object; }} */
     workflow = {};
     /** @type {WorkflowInfo} */
@@ -794,6 +798,22 @@ export class WorkflowVersion extends AuditBase {
     nodes = [];
     /** @type {string[]} */
     assets = [];
+    /** @type {string} */
+    posterImage;
+    /** @type {{ [index:string]: number; }} */
+    reactions = {};
+    /** @type {number} */
+    reactionsCount;
+}
+export class WorkflowVersionReactionInfo {
+    /** @param {{id?:number,versionId?:number,reaction?:Reaction}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    id;
+    /** @type {number} */
+    versionId;
+    /** @type {Reaction} */
+    reaction;
 }
 export class CommentResult {
     /** @param {{id?:number,threadId?:number,replyId?:number,content?:string,upVotes?:number,downVotes?:number,votes?:number,flagReason?:string,notes?:string,userId?:string,displayName?:string,handle?:string,profileUrl?:string,avatar?:string,createdDate?:string,modifiedDate?:string}} [init] */
@@ -852,6 +872,20 @@ export class ArtifactReaction {
     id;
     /** @type {number} */
     artifactId;
+    /** @type {string} */
+    userId;
+    /** @type {Reaction} */
+    reaction;
+    /** @type {string} */
+    createdDate;
+}
+export class WorkflowVersionReaction {
+    /** @param {{id?:number,versionId?:number,userId?:string,reaction?:Reaction,createdDate?:string}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    id;
+    /** @type {number} */
+    versionId;
     /** @type {string} */
     userId;
     /** @type {Reaction} */
@@ -1020,7 +1054,7 @@ export class QueryResponse {
     responseStatus;
 }
 export class AgentInfo {
-    /** @param {{id?:number,shortId?:string,gpus?:GpuInfo[],workflows?:string[],nodes?:string[],checkpoints?:string[],unets?:string[],vaes?:string[],loras?:string[],clips?:string[],clipVisions?:string[],upscalers?:string[],controlNets?:string[],embeddings?:string[],stylers?:string[],gligens?:string[],photoMakers?:string[],languageModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number}} [init] */
+    /** @param {{id?:number,shortId?:string,gpus?:GpuInfo[],workflows?:string[],nodes?:string[],checkpoints?:string[],unets?:string[],vaes?:string[],loras?:string[],clips?:string[],clipVisions?:string[],upscalers?:string[],controlNets?:string[],embeddings?:string[],stylers?:string[],gligens?:string[],photoMakers?:string[],languageModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number,devicePool?:string}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -1070,6 +1104,8 @@ export class AgentInfo {
     lastUpdate;
     /** @type {number} */
     queueCount;
+    /** @type {?string} */
+    devicePool;
 }
 /** @typedef {'Queued'|'Assigned'|'Started'|'Executed'|'Completed'|'Failed'|'Cancelled'} */
 export var TaskState;
@@ -1101,10 +1137,12 @@ export class AiTaskInfo {
     errorCode;
 }
 export class OwnerAgentInfo extends AgentInfo {
-    /** @param {{deviceId?:string,lastIp?:string,id?:number,shortId?:string,gpus?:GpuInfo[],workflows?:string[],nodes?:string[],checkpoints?:string[],unets?:string[],vaes?:string[],loras?:string[],clips?:string[],clipVisions?:string[],upscalers?:string[],controlNets?:string[],embeddings?:string[],stylers?:string[],gligens?:string[],photoMakers?:string[],languageModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number}} [init] */
+    /** @param {{deviceId?:string,userId?:string,lastIp?:string,id?:number,shortId?:string,gpus?:GpuInfo[],workflows?:string[],nodes?:string[],checkpoints?:string[],unets?:string[],vaes?:string[],loras?:string[],clips?:string[],clipVisions?:string[],upscalers?:string[],controlNets?:string[],embeddings?:string[],stylers?:string[],gligens?:string[],photoMakers?:string[],languageModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number,devicePool?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {string} */
     deviceId;
+    /** @type {string} */
+    userId;
     /** @type {?string} */
     lastIp;
 }
@@ -1187,7 +1225,7 @@ export class StringsResponse {
     responseStatus;
 }
 export class Artifact extends AuditBase {
-    /** @param {{id?:number,generationId?:string,type?:AssetType,url?:string,length?:number,width?:number,height?:number,versionId?:number,workflowId?:number,threadId?:number,credits?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },reactions?:{ [index:string]: number; },phash?:string,color?:string,caption?:string,description?:string,publishedBy?:string,publishedDate?:string,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,generationId?:string,type?:AssetType,url?:string,length?:number,width?:number,height?:number,versionId?:number,workflowId?:number,threadId?:number,credits?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },reactions?:{ [index:string]: number; },reactionsCount?:number,phash?:string,color?:string,caption?:string,description?:string,publishedBy?:string,publishedDate?:string,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -1221,6 +1259,8 @@ export class Artifact extends AuditBase {
     categories;
     /** @type {{ [index:string]: number; }} */
     reactions = {};
+    /** @type {number} */
+    reactionsCount;
     /** @type {?string} */
     phash;
     /** @type {?string} */
@@ -1568,6 +1608,34 @@ export class GetWorkflowGenerationResponse {
     /** @type {?ResponseStatus} */
     responseStatus;
 }
+export class UpdateWorkflowVersionResponse {
+    /** @param {{versionId?:number,updated?:number,nodes?:string[],assets?:string[],info?:WorkflowInfo,responseStatus?:ResponseStatus}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    versionId;
+    /** @type {number} */
+    updated;
+    /** @type {string[]} */
+    nodes = [];
+    /** @type {string[]} */
+    assets = [];
+    /** @type {WorkflowInfo} */
+    info;
+    /** @type {?ResponseStatus} */
+    responseStatus;
+}
+export class ParsedWorkflow {
+    /** @param {{nodes?:string[],assets?:string[],info?:WorkflowInfo,workflow?:{ [index:string]: Object; }}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {string[]} */
+    nodes = [];
+    /** @type {string[]} */
+    assets = [];
+    /** @type {WorkflowInfo} */
+    info;
+    /** @type {{ [index:string]: Object; }} */
+    workflow = {};
+}
 export class DeleteFilesResponse {
     /** @param {{deleted?:string[],missing?:string[],failed?:string[],responseStatus?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
@@ -1753,6 +1821,18 @@ export class Clean {
     getMethod() { return 'POST' }
     createResponse() { return new CleanResponse() }
 }
+export class RecreateArtifactCategories {
+    constructor(init) { Object.assign(this, init) }
+    getTypeName() { return 'RecreateArtifactCategories' }
+    getMethod() { return 'POST' }
+    createResponse() { return new StringResponse() }
+}
+export class RecreateArtifactTags {
+    constructor(init) { Object.assign(this, init) }
+    getTypeName() { return 'RecreateArtifactTags' }
+    getMethod() { return 'POST' }
+    createResponse() { return new StringResponse() }
+}
 export class CreateMissingArtifactTags {
     constructor(init) { Object.assign(this, init) }
     getTypeName() { return 'CreateMissingArtifactTags' }
@@ -1802,15 +1882,6 @@ export class CreateMissingAvatars {
     getTypeName() { return 'CreateMissingAvatars' }
     getMethod() { return 'POST' }
     createResponse() { return new StringsResponse() }
-}
-export class GetDbLogs {
-    /** @param {{clear?:boolean}} [init] */
-    constructor(init) { Object.assign(this, init) }
-    /** @type {?boolean} */
-    clear;
-    getTypeName() { return 'GetDbLogs' }
-    getMethod() { return 'GET' }
-    createResponse() { return '' }
 }
 export class MigrateToPostgres {
     constructor(init) { Object.assign(this, init) }
@@ -1948,12 +2019,14 @@ export class TestGenerations {
     createResponse() { return [] }
 }
 export class RegisterComfyAgent {
-    /** @param {{deviceId?:string,version?:number,workflows?:string[],queueCount?:number,gpus?:GpuInfo[],languageModels?:string[]}} [init] */
+    /** @param {{deviceId?:string,version?:number,comfyVersion?:string,workflows?:string[],queueCount?:number,gpus?:GpuInfo[],languageModels?:string[]}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
     /** @type {number} */
     version;
+    /** @type {string} */
+    comfyVersion;
     /** @type {string[]} */
     workflows = [];
     /** @type {number} */
@@ -2048,8 +2121,10 @@ export class CompleteOpenAiChatTask extends OpenAiChatResponse {
     createResponse() { return new EmptyResponse() }
 }
 export class QueryArtifacts extends QueryDb_1 {
-    /** @param {{search?:string,rating?:Rating,ratings?:Rating[],category?:string,tag?:string,similar?:number,id?:number,skip?:number,take?:number,orderBy?:string,orderByDesc?:string,include?:string,fields?:string,meta?:{ [index:string]: string; }}} [init] */
+    /** @param {{id?:number,search?:string,rating?:Rating,ratings?:Rating[],category?:string,tag?:string,versionId?:number,similar?:number,userId?:string,skip?:number,take?:number,orderBy?:string,orderByDesc?:string,include?:string,fields?:string,meta?:{ [index:string]: string; }}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
+    /** @type {?number} */
+    id;
     /** @type {?string} */
     search;
     /** @type {?Rating} */
@@ -2061,9 +2136,11 @@ export class QueryArtifacts extends QueryDb_1 {
     /** @type {?string} */
     tag;
     /** @type {?number} */
-    similar;
+    versionId;
     /** @type {?number} */
-    id;
+    similar;
+    /** @type {?string} */
+    userId;
     getTypeName() { return 'QueryArtifacts' }
     getMethod() { return 'GET' }
     createResponse() { return new QueryResponse() }
@@ -2118,7 +2195,10 @@ export class GetAppData {
     createResponse() { return new GetAppDataResponse() }
 }
 export class DevicePool {
+    /** @param {{afterModifiedDate?:string}} [init] */
     constructor(init) { Object.assign(this, init) }
+    /** @type {?string} */
+    afterModifiedDate;
     getTypeName() { return 'DevicePool' }
     getMethod() { return 'GET' }
     createResponse() { return new QueryResponse() }
@@ -2131,6 +2211,15 @@ export class MyDevices {
     getTypeName() { return 'MyDevices' }
     getMethod() { return 'GET' }
     createResponse() { return new QueryResponse() }
+}
+export class RemoveDevice {
+    /** @param {{id?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    id;
+    getTypeName() { return 'RemoveDevice' }
+    getMethod() { return 'POST' }
+    createResponse() { return new EmptyResponse() }
 }
 export class GetComfyTasks {
     /** @param {{deviceId?:string}} [init] */
@@ -2168,6 +2257,15 @@ export class GetWorkflowInfo {
     getTypeName() { return 'GetWorkflowInfo' }
     getMethod() { return 'GET' }
     createResponse() { return new GetWorkflowInfoResponse() }
+}
+export class DownloadWorkflowVersion {
+    /** @param {{id?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    id;
+    getTypeName() { return 'DownloadWorkflowVersion' }
+    getMethod() { return 'GET' }
+    createResponse() { return new Blob() }
 }
 export class RequeueGeneration {
     /** @param {{id?:string}} [init] */
@@ -2303,6 +2401,59 @@ export class MoveGeneration {
     getMethod() { return 'POST' }
     createResponse() { return new EmptyResponse() }
 }
+export class PinToWorkflowVersion {
+    /** @param {{versionId?:number,posterImage?:string}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    versionId;
+    /** @type {string} */
+    posterImage;
+    getTypeName() { return 'PinToWorkflowVersion' }
+    getMethod() { return 'POST' }
+    createResponse() { return new EmptyResponse() }
+}
+export class FeatureArtifact {
+    /** @param {{artifactId?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    artifactId;
+    getTypeName() { return 'FeatureArtifact' }
+    getMethod() { return 'POST' }
+    createResponse() { return new Artifact() }
+}
+export class UnFeatureArtifact {
+    /** @param {{artifactId?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    artifactId;
+    getTypeName() { return 'UnFeatureArtifact' }
+    getMethod() { return 'POST' }
+    createResponse() { return new Artifact() }
+}
+export class UpdateWorkflowVersion {
+    /** @param {{versionId?:number,workflow?:string}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    versionId;
+    /** @type {?string} */
+    workflow;
+    getTypeName() { return 'UpdateWorkflowVersion' }
+    getMethod() { return 'POST' }
+    createResponse() { return new UpdateWorkflowVersionResponse() }
+}
+export class ParseWorkflow {
+    /** @param {{name?:string,json?:string,file?:string}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {?string} */
+    name;
+    /** @type {?string} */
+    json;
+    /** @type {?string} */
+    file;
+    getTypeName() { return 'ParseWorkflow' }
+    getMethod() { return 'POST' }
+    createResponse() { return new ParsedWorkflow() }
+}
 export class GetArtifact {
     /** @param {{path?:string,download?:boolean}} [init] */
     constructor(init) { Object.assign(this, init) }
@@ -2417,6 +2568,19 @@ export class CreateThread {
     getTypeName() { return 'CreateThread' }
     getMethod() { return 'POST' }
     createResponse() { return new Thread() }
+}
+export class CreateGenerationComment {
+    /** @param {{generationId?:string,replyId?:number,content?:string}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {string} */
+    generationId;
+    /** @type {?number} */
+    replyId;
+    /** @type {string} */
+    content;
+    getTypeName() { return 'CreateGenerationComment' }
+    getMethod() { return 'POST' }
+    createResponse() { return new Comment() }
 }
 export class CreateComment {
     /** @param {{threadId?:number,replyId?:number,content?:string}} [init] */
@@ -2562,6 +2726,15 @@ export class QueryWorkflowVersions extends QueryDb_1 {
     /** @type {?string} */
     afterModifiedDate;
     getTypeName() { return 'QueryWorkflowVersions' }
+    getMethod() { return 'GET' }
+    createResponse() { return new QueryResponse() }
+}
+export class MyWorkflowVersionReactions extends QueryDb_2 {
+    /** @param {{afterId?:number,skip?:number,take?:number,orderBy?:string,orderByDesc?:string,include?:string,fields?:string,meta?:{ [index:string]: string; }}} [init] */
+    constructor(init) { super(init); Object.assign(this, init) }
+    /** @type {?number} */
+    afterId;
+    getTypeName() { return 'MyWorkflowVersionReactions' }
     getMethod() { return 'GET' }
     createResponse() { return new QueryResponse() }
 }
@@ -2730,6 +2903,28 @@ export class DeleteCoupon {
     getTypeName() { return 'DeleteCoupon' }
     getMethod() { return 'DELETE' }
     createResponse() { }
+}
+export class CreateWorkflowVersionReaction {
+    /** @param {{versionId?:number,reaction?:Reaction}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    versionId;
+    /** @type {Reaction} */
+    reaction;
+    getTypeName() { return 'CreateWorkflowVersionReaction' }
+    getMethod() { return 'POST' }
+    createResponse() { return new WorkflowVersionReaction() }
+}
+export class DeleteWorkflowVersionReaction {
+    /** @param {{versionId?:number,reaction?:Reaction}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    versionId;
+    /** @type {Reaction} */
+    reaction;
+    getTypeName() { return 'DeleteWorkflowVersionReaction' }
+    getMethod() { return 'DELETE' }
+    createResponse() { return new IdResponse() }
 }
 export class DeleteMyWorkflowGeneration {
     /** @param {{id?:string}} [init] */

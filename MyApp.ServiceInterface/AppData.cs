@@ -49,14 +49,17 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         return MaxDeletedRowId = db.Scalar<int>(db.From<DeletedRow>().Select(x => Sql.Max(x.Id)));
     }
 
-    public List<ComfyAgent> GetVisibleComfyAgents(string? userId=null)
+    public void RemoveAgent(string deviceId)
+    {
+        ComfyAgents.TryRemove(deviceId, out _);
+    }
+
+    public IEnumerable<ComfyAgent> GetVisibleComfyAgents()
     {
         var agents = ComfyAgents.Values
             .Where(x => x.OfflineDate == null 
-                        && x.LastUpdate > DateTime.UtcNow.AddMinutes(-5)
-                        && x.Gpus?.Count > 0
-                        && (userId == null || x.UserId == userId))
-            .ToList();
+                && x.LastUpdate > DateTime.UtcNow.AddMinutes(-10)
+                && x.Gpus?.Count > 0);
         return agents;
     }
 
@@ -245,6 +248,37 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     public Workflow? GetWorkflow(int? workflowId) => workflowId == null 
         ? null 
         : Workflows.FirstOrDefault(x => x.Id == workflowId);
+
+    public ParsedWorkflow? ParseWorkflow(string workflowJson, string workflowName)
+    {
+        var ret = new ParsedWorkflow {
+            Workflow = workflowJson.ParseAsObjectDictionary()
+        };
+        try
+        {
+            if (ret.Workflow["nodes"] is not List<object> nodesObj)
+                throw new Exception("No nodes found in workflow JSON");
+
+            ret.Nodes = nodesObj.Map(x => ((Dictionary<string, object>)x)["type"].ToString()!).Distinct().OrderBy(x => x).ToList();
+            ret.Assets = ComfyWorkflowParser.ExtractAssetPaths(ret.Workflow, log).Distinct().OrderBy(x => x).ToList();
+        }
+        catch (Exception e)
+        {
+            log.LogError(e, "Failed to parse workflow JSON: {WorkflowPath}", workflowName);
+            return null;
+        }
+
+        try
+        {
+            ret.Info = ComfyWorkflowParser.Parse(ret.Workflow, workflowName, Metadata.DefaultNodeDefinitions);
+        }
+        catch (Exception e)
+        {
+            log.LogError(e, "Failed to parse workflow info: {WorkflowPath}", workflowName);
+            return null;
+        }
+        return ret;
+    }
     
     public void LoadWorkflows(IDbConnection db)
     {
@@ -271,34 +305,11 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
             var workflowJson = ReadTextFile(workflowsPath.CombineWith(workflowPath))
                 ?? throw new Exception($"Workflow not found: {workflowPath}");
 
-            var workflowObj = workflowJson.ParseAsObjectDictionary();
-            List<string> nodes;
-            List<string> assets;
-            try
-            {
-                if (workflowObj["nodes"] is not List<object> nodesObj)
-                    throw new Exception("No nodes found in workflow JSON");
-
-                nodes = nodesObj.Map(x => ((Dictionary<string, object>)x)["type"].ToString()!);
-                assets = ComfyWorkflowParser.ExtractAssetPaths(workflowObj, log).ToList();
-            }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to parse workflow JSON: {WorkflowPath}", workflowPath);
+            var workflowName = StringFormatters.FormatName(workflowPath.LastRightPart('/').WithoutExtension());
+            var parsedWorkflow = ParseWorkflow(workflowJson, workflowName);
+            if (parsedWorkflow == null)
                 continue;
-            }
-
-            WorkflowInfo workflowInfo;
-            try
-            {
-                workflowInfo = ComfyWorkflowParser.Parse(workflowObj, workflowPath, Metadata.DefaultNodeDefinitions);
-            }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to parse workflow info: {WorkflowPath}", workflowPath);
-                continue;
-            }
-
+            
             var defaultUser = AppConfig.Instance.DefaultUserId;
 
             var name = parts[2].WithoutExtension();
@@ -323,10 +334,11 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
             {
                 ParentId = workflow.Id,
                 Version = "v1",
-                Workflow = workflowObj,
-                Info = workflowInfo,
-                Nodes = nodes,
-                Assets = assets,
+                Name = name,
+                Workflow = parsedWorkflow.Workflow,
+                Info = parsedWorkflow.Info,
+                Nodes = parsedWorkflow.Nodes,
+                Assets = parsedWorkflow.Assets,
                 CreatedBy = defaultUser,
                 CreatedDate = DateTime.UtcNow,
                 ModifiedBy = defaultUser,
@@ -528,7 +540,10 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         if (!ComfyAgents.TryGetValue(deviceId, out var agent))
             return DefaultMemory;
         
-        return agent.Gpus?.Max(x => x.Total) / 1024 ?? DefaultMemory;
+        if (agent.Gpus == null || agent.Gpus.Count == 0)
+            return DefaultMemory;
+        
+        return agent.Gpus.Max(x => x.Total) / 1024;
     }
     
     public int CalculateCredits(string? deviceId, TimeSpan? duration)

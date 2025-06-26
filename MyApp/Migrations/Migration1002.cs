@@ -20,6 +20,9 @@ public class Migration1002 : MigrationBase
         public string Path { get; set; }
         public string Description { get; set; } // Markdown
         public int? PinVersionId { get; set; }
+        public int? ThreadId { get; set; }
+        [PgSqlJsonB]
+        public List<string>? Tags { get; set; }
     }
 
     public class WorkflowVersion : AuditBase
@@ -29,6 +32,7 @@ public class Migration1002 : MigrationBase
         [ForeignKey(typeof(Workflow))]
         public int ParentId { get; set; } //ComfyWorkflow.Id
         public string Version { get; set; }  //v1
+        public string? Name { get; set; }    // Version Name
         public Dictionary<string,object?> Workflow { get; set; }
         public ComfyWorkflowInfo Info { get; set; }
         public List<string> Nodes { get; set; }
@@ -45,6 +49,20 @@ public class Migration1002 : MigrationBase
         public Dictionary<string, long> Reactions { get; set; } = new();
         [Index, Default(0)]
         public int ReactionsCount { get; set; }
+    }
+
+    [UniqueConstraint(nameof(VersionId), nameof(UserId), nameof(Reaction))]
+    public class WorkflowVersionReaction
+    {
+        [AutoIncrement]
+        public int Id { get; set; }
+        [Index]
+        public int VersionId { get; set; }
+        [Index]
+        public string UserId { get; set; }
+        public Reaction Reaction { get; set; }
+        [Default("{SYSTEM_UTC}")]
+        public DateTime CreatedDate { get; set; }
     }
     
     public class WorkflowGeneration : AuditBase
@@ -79,6 +97,10 @@ public class Migration1002 : MigrationBase
         public string? PublishedBy { get; set; }
         [Index]
         public DateTime? PublishedDate { get; set; }
+        /// <summary>
+        /// Thread Id used for public comments
+        /// </summary>
+        public int? PublicThreadId { get; set; } 
     }
     
     public class Artifact : AuditBase
@@ -125,6 +147,8 @@ public class Migration1002 : MigrationBase
     }
     
     public enum AssetType {}
+    [Flags]
+    public enum Reaction {}
     public enum Rating {}
     public class ComfyWorkflowInfo {}
     public class ApiPrompt {}
@@ -136,6 +160,7 @@ public class Migration1002 : MigrationBase
     {
         Db.CreateTable<Workflow>();
         Db.CreateTable<WorkflowVersion>();
+        Db.CreateTable<WorkflowVersionReaction>();
         Db.CreateTable<WorkflowGeneration>();
         Db.CreateTable<Artifact>();
     }
@@ -144,6 +169,7 @@ public class Migration1002 : MigrationBase
     {
         Db.DropTable<Artifact>();
         Db.DropTable<WorkflowGeneration>();
+        Db.DropTable<WorkflowVersionReaction>();
         Db.DropTable<WorkflowVersion>();
         Db.DropTable<Workflow>();
     }

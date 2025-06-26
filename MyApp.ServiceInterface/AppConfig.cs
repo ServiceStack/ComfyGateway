@@ -18,6 +18,7 @@ public class AppConfig
     public string? GitPagesBaseUrl { get; set; }
 
     public string DefaultUserName { get; set; } = "comfy";
+    public string SystemUserId { get; set; } = "3DA81EB3-12FA-4012-986D-3D6B08765649";
     public string DefaultUserId { get; set; } = "5B3DF8CA-6AB3-4BEE-AAFC-8FB0C8DF349D";
     public string[] FeaturedUserIds { get; set; } = [];
     public string DefaultConnection { get; set; }
@@ -32,6 +33,8 @@ public class AppConfig
         FeaturedTitle = FeaturedTitle,
         FeaturedSubTitle = FeaturedSubTitle,
         PublicBaseUrl = PublicBaseUrl,
+        SystemUserId = SystemUserId,
+        FeaturedUserIds = FeaturedUserIds,
     };
 }
 
@@ -42,4 +45,6 @@ public class VueAppConfig
     public string FeaturedTitle { get; set; }
     public string FeaturedSubTitle { get; set; }
     public string PublicBaseUrl { get; set; }
+    public string SystemUserId { get; set; }
+    public string[] FeaturedUserIds { get; set; } = [];
 }

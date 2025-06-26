@@ -1,9 +1,14 @@
 import { ref, inject, onMounted } from "vue"
 import { formatRating } from "./lib/utils.mjs"
 import { toDate } from "@servicestack/client"
+import ArtifactMenuHome from "./components/ArtifactMenuHome.mjs"
 
 export default {
+    components: {
+        ArtifactMenuHome
+    },
     template: `
+    <ArtifactMenuHome />
     <!-- Hero Section -->
     <div class="relative overflow-hidden bg-gradient-to-b from-slate-900 to-gray-800 text-black dark:text-white">
         <!-- Gradient Overlay -->
@@ -19,6 +24,12 @@ export default {
                 <p v-if="store.appConfig.featuredSubTitle" class="mt-6 text-xl text-slate-300 max-w-3xl mx-auto">
                     {{store.appConfig.featuredSubTitle}}
                 </p>
+                <div>
+                    <RouterLink to="/images" class="ml-2 text-sm text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400">
+                        explore all images
+                        <span>&rarr;</span>
+                    </RouterLink>
+                </div>
             </div>
         </div>
     </div>
@@ -35,7 +46,9 @@ export default {
                             <img :src="artifact.url"
                                  alt="Generated artifact"
                                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
-                                 loading="lazy" />
+                                 loading="lazy"
+                                 @contextmenu.prevent="events.publish('showArtifactMenu', { artifactId:artifact.id, event:$event })"
+                                 @error="imageSrc=store.getArtifactImageErrorUrl(artifact.id, null, 300)" />
                         </div>
                     </RouterLink>
                     
@@ -63,15 +76,17 @@ export default {
                                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"></path></svg>
                             </RouterLink>
 
-                            <span>
-                                {{store.workflows.find(x => x.id == artifact.workflowId)?.name}}
-                            </span>
+                            <RouterLink v-if="store.workflows.find(x => x.id == artifact.workflowId)" :to="{ path:'/images', query: { version: artifact.versionId } }" 
+                                class="text-gray-600 dark:text-gray-300 hover:text-sky-500 dark:hover:text-sky-400">
+                                {{store.workflows.find(x => x.id == artifact.workflowId).name}}
+                            </RouterLink>
                         </div>
 
 
                         <!-- Tags -->
-                        <div v-if="Object.keys(artifact.tags ?? {}).length" class="flex flex-wrap gap-1 mt-2">
-                            <RouterLink :to="{ path:'/images', query:{ tag:tag } }" v-for="tag in Object.keys(artifact.tags).slice(0, 3)" :key="tag.key" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                        <div v-if="Object.keys(artifact.tags ?? {}).length" class="flex flex-wrap gap-1 mt-2 items-center">
+                            <RouterLink :to="{ path:'/images', query:{ tag:tag } }" v-for="tag in Object.keys(artifact.tags).slice(0, 3)" :key="tag.key" 
+                                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600">
                                 {{ tag }}
                             </RouterLink>
                             <span v-if="Object.keys(artifact.tags).length > 3" class="text-xs text-gray-500 dark:text-gray-400">
@@ -100,6 +115,7 @@ export default {
     `,
     setup() {
         const store = inject('store')
+        const events = inject('events')
         const artifacts = ref([])
 
         onMounted(async () => {
@@ -147,6 +163,7 @@ export default {
 
         return {
             store,
+            events,
             artifacts,
             getRatingText,
             getAspectRatio,

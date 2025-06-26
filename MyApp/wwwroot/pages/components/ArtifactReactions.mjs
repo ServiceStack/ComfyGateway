@@ -3,7 +3,7 @@ import { reactionCounts } from "../lib/utils.mjs"
 
 export default {
     template:`
-    <div v-if="artifact" class="px-2 pt-1.5 text-sm flex items-center justify-between gap-1 w-full">
+    <div v-if="artifact" class="text-sm flex items-center justify-between w-full">
         <button v-for="(count,emoji) of reactionCounts(artifact.reactions)" type="button" @click.prevent.stop="toggleArtifactReaction(artifact, emoji)"
                 :title="'React with ' + emoji"
                 class="px-1 py-0.5 lg:px-2 rounded border" :class="[ store.hasArtifactReaction(artifact.id, emoji) ? 'shadow-sm bg-gray-200 dark:bg-gray-700' : 'border-transparent hover:bg-gray-200 dark:hover:bg-gray-700' ]">

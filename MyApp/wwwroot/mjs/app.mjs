@@ -1,5 +1,5 @@
 import { createApp, reactive, ref, computed, nextTick, defineAsyncComponent } from "vue"
-import { JsonServiceClient, $1, $$ } from "@servicestack/client"
+import { JsonServiceClient, EventBus, $1, $$ } from "@servicestack/client"
 import ServiceStackVue, { useAuth } from "@servicestack/vue"
 import Header from "../pages/components/Header.mjs"
 import store from "../pages/lib/store.mjs"
@@ -11,18 +11,17 @@ const routes = [
     { path: '/images/:path?', component: () => import('../pages/Images.mjs') },
     { path: '/gallery/:path?', component: () => import('../pages/Images.mjs') },
     { path: '/generations/:id?', component: () => import('../pages/Generation.mjs') },
-    { path: '/comfy', component: () => import('../pages/Comfy.mjs') },
 ]
 const router = createRouter({
     history: createWebHistory(),
     routes,
 })
 
-let client = null, Apps = []
+let client = null, Apps = [], events = new EventBus()
 let AppData = {
     init:false
 }
-export { client, store, Apps }
+export { client, store, Apps, events }
 
 // const Header = defineAsyncComponent(() =>
 //     import('../pages/components/Header.mjs')
@@ -92,6 +91,7 @@ export function mount(sel, component, props) {
     app.provide('store', store)
     app.provide('server', globalThis.Server)
     app.provide('routes', routes)
+    app.provide('events', events)
     Object.keys(Components).forEach(name => {
         app.component(name, Components[name])
     })

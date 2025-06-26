@@ -2,7 +2,7 @@ import { reactive, toRaw } from "vue"
 import { useAuth } from "@servicestack/vue"
 import { JsonServiceClient, ApiResult, combinePaths, rightPart } from "@servicestack/client"
 import { openDB, deleteDB, wrap, unwrap } from '/lib/mjs/idb.mjs'
-import { toJsonObject, toJsonArray, sortByCreatedDesc, sortByModifiedDesc } from "./utils.mjs"
+import { toJsonObject, toJsonArray, sortByCreatedDesc, sortByModifiedDesc, getRatingDisplay } from "./utils.mjs"
 import {
     QueryWorkflows,
     GetWorkflowInfo,
@@ -26,7 +26,14 @@ import {
     MyArtifactReactions,
     CreateArtifactReaction,
     DeleteArtifactReaction,
+    MyWorkflowVersionReactions,
+    CreateWorkflowVersionReaction,
+    DeleteWorkflowVersionReaction,
     WaitForMyWorkflowGenerations,
+    PinToWorkflowVersion,
+    FeatureArtifact,
+    UnFeatureArtifact,
+    RemoveDevice,
     Rating,
     Table, QueryArtifacts,
 } from "../../mjs/dtos.mjs"
@@ -57,10 +64,16 @@ const UserTables = {
     ThreadReaction: 'ThreadReaction',
     ArtifactReaction: 'ArtifactReaction',
     CommentReaction: 'CommentReaction',
+    WorkflowVersionReaction: 'WorkflowVersionReaction',
 }
 export const Tables = {
     ...AppTables,
     ...UserTables,
+}
+
+const Errors = {
+    NotAuthenticated: new ApiResult({ error: { errorCode: 'NotAuthenticated', message: 'Not Authenticated' } }),
+    NotAdmin: new ApiResult({ error: { errorCode: 'Forbidden', message: 'Operation not allowed' } }), 
 }
 
 function createStore(db, table, createOptions, storeOptions) {
@@ -79,19 +92,19 @@ let o = {
     AssetsBasePath,
     Tables,
     user: null,
+    appConfig: null, // populated in VueApp.razor
     _init: false,
     initializing: false,
     _dbApp: null,
     _dbUser: null,
     _client: new JsonServiceClient(),
     prefs: null,
-    workflowCount: 0,
     workflowGenerationCount: 0,
     threadCount: 0,
     usedSeeds:[],
     threads:[],
     workflows:[],
-    workflowsVersions:[],
+    workflowVersions:[],
     selectedThread: null,
     selectedWorkflow: null,
     threadGenerations:[],
@@ -105,6 +118,8 @@ let o = {
     cursors: {},
     /** @type {{ [index:string]: number[]; }} */
     artifactReactions:{},
+    /** @type {{ [index:string]: number[]; }} */
+    workflowVersionReactions:{},
     
     async init(client) {
         console.log('store.init', this._init, useAuth().user?.value?.userName)
@@ -124,6 +139,7 @@ let o = {
 
         this.prefs = toJsonObject(localStorage.getItem(this.prefsKey)) ?? {
             isOver18: false,
+            sortBy: '-createdDate',
         }
         this.selectedWorkflow = toJsonObject(localStorage.getItem(this.workflowKey))
         this.cursors = toJsonObject(localStorage.getItem(this.cursorsKey)) ?? {
@@ -140,6 +156,8 @@ let o = {
         this._init = true
     },
 
+    get userId() { return this.user?.userId },
+    get isAdmin() { return this.user?.roles?.includes('Admin') },
     get prefsKey() { return `gateway:${this.user?.userName ?? 'anon'}:prefs` },
     get workflowKey() { return `gateway:${this.user?.userName ?? 'anon'}:workflow` },
     get ratingsKey() { return `gateway:${this.user?.userName ?? 'anon'}:ratings` },
@@ -205,6 +223,9 @@ let o = {
                 createStore(db, Tables.CommentReaction, { keyPath: 'id' }, {
                     indexes: ['c']
                 })
+                createStore(db, Tables.WorkflowVersionReaction, { keyPath: 'id' }, {
+                    indexes: ['v']
+                })
             },
             blocked(currentVersion, blockedVersion, event) {
                 console.log('Database blocked - close all connections first', event);
@@ -219,7 +240,29 @@ let o = {
     },
 
     async clearAppDb() {
-        console.log('clearAppDb', AppDatabase)
+        await this.clearDb(AppDatabase)
+    },
+
+    async clearUserDb() {
+        await this.clearDb(UserDatabase)
+    },
+
+    async clearDb(dbName) {
+        console.log('clearDb', dbName)
+        // Request to remove all records from the database
+        this.db(dbName)?.clear()
+    },
+    
+    async resetAndDestroy() {
+        console.log('resetAndDestroy')
+        Object.keys(localStorage)
+            .filter(x => x.startsWith('gateway:') || x === '/metadata/app.json')
+            .forEach(x => localStorage.removeItem(x))
+        await this.recreateAppDb()
+        await this.recreateUserDb()
+    },
+
+    async recreateAppDb() {
         if (this._dbApp) {
             this._dbApp.close()
             this._dbApp = null
@@ -228,8 +271,7 @@ let o = {
         await this.recreateDb(AppDatabase, () => this.openAppDb())
     },
 
-    async clearUserDb() {
-        console.log('clearUserDb', UserDatabase)
+    async recreateUserDb() {
         if (this._dbUser) {
             this._dbUser.close()
             this._dbUser = null
@@ -239,7 +281,7 @@ let o = {
     },
 
     async recreateDb(dbName, openDb) {
-        console.log('deleteAndRecreateDB')
+        console.log('recreateDb', dbName)
         return new Promise((resolve, reject) => {
             // Step 1: Delete the database
             const deleteReq = indexedDB.deleteDatabase(dbName);
@@ -269,8 +311,7 @@ let o = {
 
         this.selectedRatings = this.loadSelectedRatings()
         const tasks = [
-            this.loadWorkflows(),
-            this.loadWorkflowVersions(),
+            this.loadWorkflowsAndVersions(),
             this.processDeletedRows(),
         ]
         if (this.user) {
@@ -278,14 +319,11 @@ let o = {
                 this.loadThreads(),
                 this.loadMyGenerations(),
                 this.loadMyArtifactReactions(),
+                this.loadMyWorkflowVersionReactions(),
             )
         }
         await Promise.all(tasks)
         this.initializing = false
-    },
-
-    get isAdmin() {
-        return this.user?.roles?.includes('Admin')
     },
 
     async loadWorkflows() {
@@ -304,8 +342,6 @@ let o = {
             await Promise.all(api.response.results.map(x => tx.store.put(x)))
             await tx.done
         }
-        this.workflowCount = await this.db(Tables.Workflow).count(Tables.Workflow)
-        this.workflows = await this.getWorkflows()
     },
 
     async loadWorkflowVersions() {
@@ -324,8 +360,27 @@ let o = {
             await Promise.all(api.response.results.map(x => tx.store.put(x)))
             await tx.done
         }
-        this.workflowVersionCount = await this.db(Tables.WorkflowVersion).count(Tables.WorkflowVersion)
         this.workflowVersions = await this.getWorkflowVersions()
+    },
+
+    async loadWorkflowsAndVersions() {
+        await Promise.all([
+            this.loadWorkflows(),
+            this.loadWorkflowVersions(),
+        ])
+        
+        const workflows = await this.getWorkflows()
+        const workflowVersions = await this.getWorkflowVersions()
+        workflows.forEach(x => {
+            x.versions = workflowVersions.filter(y => y.parentId === x.id)
+            x.version = x.versions.find(y => y.id === x.pinVersionId)
+                ?? x.versions[0]
+            if (x.version) {
+                x.version.name ??= x.name
+            }
+        })
+        this.workflows = workflows.filter(x => x.version)
+        this.workflows.sort((a, b) => b.version.reactionsCount - a.version.reactionsCount)
     },
 
     async processDeletedRows() {
@@ -421,7 +476,6 @@ let o = {
             request.afterId = afterId
         }
         
-        //this.artifactReactionCount = await this.db(Tables.ArtifactReaction).count(Tables.ArtifactReaction)
         const allReactions = await this.getAll(Tables.ArtifactReaction)
         const reactionsMap = {}
         for (const reaction of allReactions) {
@@ -434,17 +488,74 @@ let o = {
     hasArtifactReaction(artifactId, reaction) {
         return this.artifactReactions[artifactId]?.includes(reaction)
     },
+
+    async loadMyWorkflowVersionReactions() {
+        // Get last ArtifactReaction
+        let afterId = await this.getLastId(Tables.WorkflowVersionReaction)
+        const orderBy = 'id'
+
+        console.log('loadMyWorkflowVersionReactions', afterId)
+
+        // Query for any new MyArtifactReactions
+        const request = afterId
+            ? new MyWorkflowVersionReactions({ afterId, take, orderBy })
+            : new MyWorkflowVersionReactions({ take, orderBy })
+
+        let lastId = afterId
+        let i = 0
+        while (true) {
+            const api = await this._client.api(request)
+            if (api.error) {
+                console.error('Error loading MyWorkflowVersionReactions', api.error)
+                break
+            }
+            if (api.response.results) {
+                // save to IndexedDB
+                const tx = this.transaction(Tables.WorkflowVersionReaction, 'readwrite')
+                await Promise.all(api.response.results.map(x => tx.store.put(x)))
+                await tx.done
+            }
+            if (api.response.results.length < take) break
+            afterId = await this.getLastId(Tables.WorkflowVersionReaction)
+            if (afterId === lastId) {
+                console.log('MyWorkflowVersionReactions: no more reactions')
+                break
+            }
+            console.log('MyWorkflowVersionReactions', i++, afterId, request.afterId, afterId === request.afterId)
+            lastId = request.afterId
+            request.afterId = afterId
+        }
+
+        const allReactions = await this.getAll(Tables.WorkflowVersionReaction)
+        const reactionsMap = {}
+        for (const reaction of allReactions) {
+            reactionsMap[reaction.v] ??= []
+            reactionsMap[reaction.v].push(String.fromCodePoint(reaction.r))
+        }
+        this.workflowVersionReactions = reactionsMap
+        
+        await this.loadWorkflowsAndVersions()
+    },
+    hasWorkflowVersionReaction(versionId, reaction) {
+        return this.workflowVersionReactions[versionId]?.includes(reaction)
+    },
     
     redirectToSignIn() {
         location.href = '/Account/Login?returnUrl=' + encodeURIComponent(location.href)
-        return new ApiResult({ error: { errorCode: 'NotAuthenticated', message: 'Not Authenticated' } })
+        return Errors.NotAuthenticated
+    },
+    
+    redirectedAnonUser() {
+        if (!this.user) {
+            this.redirectToSignIn()
+            return true
+        }
+        return false
     },
     
     async toggleArtifactReaction(artifactId, reactionChar) {
-        if (!this.user) {
-            this.redirectToSignIn()
-            return
-        }
+        if (this.redirectedAnonUser()) return
+        
         const hasReaction = this.hasArtifactReaction(artifactId, reactionChar)
         const reaction = reactionChar.codePointAt(0)
         const request = hasReaction
@@ -465,6 +576,36 @@ let o = {
             await this.loadMyArtifactReactions()
         }
         return api
+    },
+
+    async toggleWorkflowVersionReaction(versionId, reactionChar) {
+        if (this.redirectedAnonUser()) return
+
+        const hasReaction = this.hasWorkflowVersionReaction(versionId, reactionChar)
+        console.log('toggleWorkflowVersionReaction', versionId, reactionChar, hasReaction)
+        const reaction = reactionChar.codePointAt(0)
+        const request = hasReaction
+            ? new DeleteWorkflowVersionReaction({ versionId, reaction })
+            : new CreateWorkflowVersionReaction({ versionId, reaction })
+        const api = await this._client.api(request)
+        if (api.succeeded) {
+            if (hasReaction) {
+                this.workflowVersionReactions[versionId] = this.workflowVersionReactions[versionId].filter(x => x !== reaction)
+                const allReactions = await this.getAll(Tables.WorkflowVersionReaction)
+                const findReaction = allReactions.find(x => x.v === versionId && x.r === reaction)
+                if (findReaction) {
+                    const tx = this.transaction(Tables.WorkflowVersionReaction, 'readwrite')
+                    await tx.store.delete(findReaction.id)
+                    await tx.done
+                }
+            }
+            await this.loadMyWorkflowVersionReactions()
+        }
+        return api
+    },
+    
+    async findArtifact(artifactId) {
+        return await this.get(Tables.Artifact, artifactId)
     },
     
     async getArtifact(artifactId) {
@@ -640,7 +781,15 @@ let o = {
     async getWorkflowGenerations() {
         return await this.getAll(Tables.WorkflowGeneration)
     },
-    async getWorkflowGeneration(generationId) {
+    async findWorkflowGeneration(generationId) {
+        const gen = await this.get(Tables.WorkflowGeneration, generationId)
+        if (gen) return gen
+        const api = await this._client.api(new GetWorkflowGeneration({
+            id: generationId,
+        }))
+        return api.response?.result
+    },
+    async getWorkflowGeneration(generationId,cached=false) {
         const api = await this._client.api(new GetWorkflowGeneration({
             id: generationId,
         }))
@@ -747,6 +896,51 @@ let o = {
         }
         return api
     },
+    
+    async pinWorkflowPoster(versionId, posterImage) {
+        if (!this.isAdmin) return Errors.NotAdmin
+        const api = await this._client.api(new PinToWorkflowVersion({ versionId, posterImage }))
+        if (api.succeeded) {
+            await this.loadWorkflowsAndVersions()
+        }
+        return api
+    },
+    
+    isArtifactFeatured(artifact) {
+        // If no featured users, all artifacts are featured
+        if (!this.appConfig?.featuredUserIds?.length) {
+            return true
+        }
+        return this.appConfig.featuredUserIds.includes(artifact.publishedBy)
+    },
+
+    async featureArtifact(artifact) {
+        if (!this.isAdmin) return Errors.NotAdmin
+        const artifactId = artifact.id
+        const api = await this._client.api(new FeatureArtifact({ artifactId }))
+        if (api.succeeded) {
+            artifact.publishedBy = api.response.publishedBy
+            await this.saveArtifacts([api.response])
+            console.log('featureArtifact', artifactId, artifact.publishedBy, 
+                this.appConfig?.featuredUserIds, this.isArtifactFeatured(artifact))
+        }
+        return api
+    },
+
+    isArtifactUnFeatured(artifact) {
+        return this.appConfig?.systemUserId === artifact.publishedBy
+    },
+
+    async unFeatureArtifact(artifact) {
+        if (!this.isAdmin) return Errors.NotAdmin
+        const artifactId = artifact.id
+        const api = await this._client.api(new UnFeatureArtifact({ artifactId }))
+        if (api.succeeded) {
+            artifact.publishedBy = api.response.publishedBy
+            await this.saveArtifacts([api.response])
+        }
+        return api
+    },
 
     async deleteWorkflowGenerationArtifact(generation, asset) {
         const api = await this._client.api(new DeleteWorkflowGenerationArtifact({
@@ -821,6 +1015,15 @@ let o = {
         await Promise.all(artifacts.map(x => tx.store.put(x)))
         await tx.done
     },
+    async removeArtifact(artifactId) {
+        const tx = this.transaction(Tables.Artifact, 'readwrite')
+        await tx.store.delete(artifactId)
+        await tx.done
+    },
+    
+    async removeDevice(id) {
+        return this._client.api(new RemoveDevice({ id }))
+    },
     
     async getFeaturedPortraitArtifacts(take) {
         // Get Random Artifacts from IndexedDb
@@ -829,10 +1032,13 @@ let o = {
         for await (const cursor of tx.store) {
             const img = cursor.value
             if (!store.selectedRatings.includes(img.rating)) continue
+            if (this.appConfig?.featuredUserIds?.length) {
+                if (!this.appConfig.featuredUserIds.includes(img.publishedBy)) continue
+            }
             if (img.height > img.width) {
                 results.push(img)
             }
-            if (results.length >= Math.max(take * 5, 100)) break
+            if (results.length >= Math.max(take * 10, 100)) break
         }
         results.sort(() => Math.random() - 0.5)
         return results.slice(0, take)
@@ -864,7 +1070,7 @@ let o = {
             height,
             url: asset.url,
             preview,
-            errorUrl: this.getArtifactImageErrorUrl(asset, asset.url, minSize),
+            errorUrl: this.getArtifactImageErrorUrl(asset.id, asset.url, minSize),
             rating: asset.rating,
             cls: asset.url === generation.posterImage
                 ? generation.publishedDate
@@ -920,10 +1126,14 @@ let o = {
         if (artifact.color) return `background-color:${artifact.color}`
         return this.resolveBorderColor(artifact, artifact.selected)
     },
-    /** @param {Artifact} artifact
+    /** @param {number?} artifactId
      *  @param {string} [lastImageSrc]
      *  @param {number?} minSize */
-    getArtifactImageErrorUrl(artifact, lastImageSrc, minSize = null) {
+    getArtifactImageErrorUrl(artifactId, lastImageSrc, minSize = null) {
+        if (artifactId) {
+            console.error('Failed to load image', artifactId, lastImageSrc)
+            store.removeArtifact(artifactId)
+        }
         return this.placeholderImageDataUri()
     },
     /** @param {string} fill */
@@ -934,6 +1144,15 @@ let o = {
     placeholderImageDataUri() {
         return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%23f3f4f6'/%3E%3Cg transform='translate(200,150)'%3E%3Crect x='-50' y='-40' width='100' height='80' fill='none' stroke='%23d1d5db' stroke-width='2' rx='4'/%3E%3Ccircle cx='-25' cy='-15' r='8' fill='%23d1d5db'/%3E%3Cpath d='M-35 10 L-15 -10 L5 10 L25 -5 L25 25 L-35 25 Z' fill='%23d1d5db'/%3E%3C/g%3E%3Ctext x='200' y='220' text-anchor='middle' fill='%239ca3af' font-family='Arial, sans-serif' font-size='14'%3EImage not available%3C/text%3E%3C/svg%3E`
     },
+    
+    // Ratings
+    isRatingViewable(artifact) {
+        if (!artifact) return false
+        const rating = getRatingDisplay(artifact)
+        const useRating = rating === 'PG-13' ? 'PG13' : rating
+        const isViewable = !rating || this.selectedRatings.includes(useRating)
+        return isViewable
+    }
 }
 
 let store = reactive(o)

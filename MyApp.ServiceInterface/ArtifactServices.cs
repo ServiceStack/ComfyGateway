@@ -49,6 +49,15 @@ public class ArtifactServices(
                 log.LogWarning("Unknown tag {Tag}", request.Tag);
             }
         }
+        if (request.VersionId != null)
+        {
+            q.Where(x => x.VersionId == request.VersionId);
+        }
+
+        if (request.UserId != null)
+        {
+            q.Where(x => x.CreatedBy == request.UserId);
+        }
         if (request.Similar != null)
         {
             var info = Db.Single<ArtifactInfo>(

@@ -27,6 +27,7 @@ public class ComfyAgent
     [Index]
     public string DeviceId { get; set; }
     public int Version { get; set; }
+    public string? ComfyVersion { get; set; }
     [Index]
     public string UserId { get; set; }
     public string? UserName { get; set; }
@@ -72,6 +73,7 @@ public class ComfyAgent
     public string? Status { get; set; }
     public string? Logs { get; set; }
     public ResponseStatus? Error { get; set; }
+    public DateTime? DevicePool { get; set; }
 
     [Ignore]
     public string ShortId => (DeviceId?[..4] ?? "").ToUpper();

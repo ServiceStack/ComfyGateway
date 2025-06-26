@@ -1,10 +1,12 @@
 import { inject, onMounted, ref, watch } from "vue"
-import MyDevices from "./MyDevices.mjs"
 import Feed from "./Feed.mjs"
+import DevicePool from "./DevicePool.mjs"
+import MyDevices from "./MyDevices.mjs"
 
-const AssetGallery = {
+export default {
     components: {
         Feed,
+        DevicePool,
         MyDevices,
     },
     template:`
@@ -29,7 +31,8 @@ const AssetGallery = {
             </div>
           </div>
         </div>
-        <MyDevices v-if="$route.query.tab == 'devices'" />
+        <DevicePool v-if="$route.query.tab == 'pool'" />
+        <MyDevices v-else-if="$route.query.tab == 'devices'" />
         <Feed v-else @selectGeneration="$emit('selectGeneration', $event)" @retryGeneration="$emit('retryGeneration', $event)" />
     </div>
     `,
@@ -40,6 +43,7 @@ const AssetGallery = {
 
         const tabs = [
             { name: 'Feed', tab: undefined },
+            { name: 'Device Pool', tab: 'pool' },
             { name: 'My Devices', tab: 'devices' },
         ]
 
@@ -58,4 +62,3 @@ const AssetGallery = {
         }
     }
 }
-export default AssetGallery

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using MyApp.Data;
 using MyApp.Migrations;
 using MyApp.ServiceInterface;
@@ -19,6 +20,11 @@ public class ConfigureDbMigrations : IHostingStartup
     public void Configure(IWebHostBuilder builder) => builder
         .ConfigureAppHost(appHost =>
         {
+            if (AppTasks.IsRunAsAppTask())
+            {
+                JS.Configure();
+            }
+            
             var migrator = new Migrator(appHost.Resolve<IDbConnectionFactory>(), typeof(Migration1000).Assembly);
             AppTasks.Register("migrate", _ =>
             {
@@ -46,10 +52,9 @@ public class ConfigureDbMigrations : IHostingStartup
             AppTasks.Register("migrate.revert", args => migrator.Revert(args[0]));
             AppTasks.Register("migrate.rerun", args => migrator.Rerun(args[0]));
             AppTasks.Register("adhoc", args => {
-                var db = migrator.DbFactory.OpenDbConnection();
-                db.DropAndCreateTable<ArtifactReaction>();
-                db.DropAndCreateTable<ThreadReaction>();
-                db.DropAndCreateTable<CommentReaction>();
+                var Db = migrator.DbFactory.OpenDbConnection();
+                var log = NullLogger.Instance;
+                Db.DropAndCreateTable<DeletedRow>();
             });
             AppTasks.Register("metadata", args =>
             {

@@ -1,4 +1,6 @@
+using System.Text.Json.Serialization;
 using ServiceStack;
+using ServiceStack.DataAnnotations;
 
 namespace MyApp.ServiceModel;
 
@@ -28,11 +30,13 @@ public class AgentInfo
     public DateTime ModifiedDate { get; set; }
     public DateTime LastUpdate { get; set; }
     public int QueueCount { get; set; }
+    public DateTime? DevicePool { get; set; }
 }
 
 public class OwnerAgentInfo : AgentInfo
 {
     public string DeviceId { get; set; }
+    public string UserId { get; set; }
     public string? LastIp { get; set; }
 }
 
@@ -43,6 +47,8 @@ public class ComfyTask
 }
 
 [Tag(Tags.Comfy)]
+
+[AutoApply(Behavior.AuditQuery)]
 public class QueryWorkflows : QueryDb<Workflow>
 {
     public int? AfterId { get; set; }
@@ -50,6 +56,7 @@ public class QueryWorkflows : QueryDb<Workflow>
 }
 
 [Tag(Tags.Comfy)]
+[AutoApply(Behavior.AuditQuery)]
 public class QueryWorkflowVersions : QueryDb<WorkflowVersion>
 {
     public int? AfterId { get; set; }
@@ -92,6 +99,13 @@ public class GetWorkflowApiPrompt : IGet, IReturn<string>
 }
 
 [Tag(Tags.Comfy)]
+public class DownloadWorkflowVersion : IGet, IReturn<byte[]>
+{
+    [ValidateGreaterThan(0)]
+    public int Id { get; set; }
+}
+
+[Tag(Tags.Comfy)]
 [ValidateIsAuthenticated]
 public class RequeueGeneration : IPost, IReturn<RequeueGenerationResponse>
 {
@@ -123,6 +137,41 @@ public class QueueWorkflowResponse
 
 [Tag(Tags.Comfy)]
 [ValidateIsAuthenticated]
+[AutoPopulate(nameof(WorkflowVersionReaction.UserId), Eval = "userAuthId()")]
+public class CreateWorkflowVersionReaction : ICreateDb<WorkflowVersionReaction>, IReturn<WorkflowVersionReaction>
+{
+    public int VersionId { get; set; }
+    public Reaction Reaction { get; set; }
+}
+
+[Tag(Tags.Comfy)]
+[ValidateIsAuthenticated]
+[AutoPopulate(nameof(WorkflowVersionReaction.UserId), Eval = "userAuthId()")]
+public class DeleteWorkflowVersionReaction : IDeleteDb<WorkflowVersionReaction>, IReturn<IdResponse>
+{
+    public int VersionId { get; set; }
+    public Reaction Reaction { get; set; }
+}
+
+[Tag(Tags.Comfy)]
+[ValidateIsAuthenticated]
+[AutoFilter(QueryTerm.Ensure, nameof(WorkflowVersionReaction.UserId), Eval = "userAuthId()")]
+public class MyWorkflowVersionReactions : QueryDb<WorkflowVersionReaction,WorkflowVersionReactionInfo>
+{
+    public int? AfterId { get; set; }
+}
+public class WorkflowVersionReactionInfo
+{
+    public int Id { get; set; }
+    [JsonPropertyName("v")]
+    public int VersionId { get; set; }
+    [JsonPropertyName("r")]
+    public Reaction Reaction { get; set; }
+}
+
+
+[Tag(Tags.Comfy)]
+[ValidateIsAuthenticated]
 [AutoApply(Behavior.AuditQuery)]
 [AutoFilter(QueryTerm.Ensure, nameof(WorkflowGeneration.CreatedBy), Eval = "userAuthId()")]
 public class MyWorkflowGenerations : QueryDb<WorkflowGeneration>
@@ -136,6 +185,7 @@ public class MyWorkflowGenerations : QueryDb<WorkflowGeneration>
 [Tag(Tags.Comfy)]
 public class DevicePool : IGet, IReturn<QueryResponse<AgentInfo>> 
 {
+    public DateTime? AfterModifiedDate { get; set; }
 }
 
 [Tag(Tags.Comfy)]
@@ -143,6 +193,15 @@ public class DevicePool : IGet, IReturn<QueryResponse<AgentInfo>>
 public class MyDevices : IGet, IReturn<QueryResponse<OwnerAgentInfo>> 
 {
     public DateTime? AfterModifiedDate { get; set; }
+}
+
+
+[Tag(Tags.Comfy)]
+[ValidateIsAuthenticated]
+public class RemoveDevice : IPost, IReturn<EmptyResponse> 
+{
+    [ValidateGreaterThan(0)]
+    public int Id { get; set; }
 }
 
 public class TestGenerations : IGet, IReturn<List<WorkflowGeneration>>
@@ -270,4 +329,14 @@ public class MoveGeneration : IReturn<EmptyResponse>
 {
     public string GenerationId { get; set; }
     public int ThreadId { get; set; }
+}
+
+[Tag(Tags.Comfy)]
+public class ParseWorkflow : IPost, IReturn<ParsedWorkflow>
+{
+    public string? Name { get; set; }
+    public string? Json { get; set; }
+    
+    [Input(Type = "file")]
+    public string? File { get; set; }
 }

@@ -41,9 +41,26 @@ public class ComfyServices(ILogger<ComfyServices> log,
         return ret;
     }
 
-    public object Get(DevicePool request)
+    public async Task<object> Get(DevicePool request)
     {
-        var visibleAgents = appData.GetVisibleComfyAgents();
+        var visibleAgents = appData.GetVisibleComfyAgents()
+            .Where(x => x.DevicePool != null)
+            .ToList();
+        
+        if (request.AfterModifiedDate != null)
+        {
+            var startedAt = DateTime.UtcNow;
+            var waitFor = TimeSpan.FromSeconds(60);
+            List<ComfyAgent> userAgents;
+            do
+            {
+                await Task.Delay(200);
+                userAgents = appData.GetVisibleComfyAgents()
+                    .Where(x => x.DevicePool != null)
+                    .ToList();
+            } while (userAgents.Count == 0 || userAgents.Max(x => x.ModifiedDate) < startedAt || DateTime.UtcNow - startedAt < waitFor);
+        }
+        
         return new QueryResponse<AgentInfo>
         {
             Total = visibleAgents.Count,
@@ -53,8 +70,8 @@ public class ComfyServices(ILogger<ComfyServices> log,
     
     public async Task<object> Get(MyDevices request)
     {
-        var userId = Request.GetClaimsPrincipal().GetUserId();
-
+        var userId = Request.GetRequiredUserId();
+        
         if (request.AfterModifiedDate != null)
         {
             var startedAt = DateTime.UtcNow;
@@ -62,17 +79,51 @@ public class ComfyServices(ILogger<ComfyServices> log,
             List<ComfyAgent> userAgents;
             do
             {
-                await Task.Delay(200);
-                userAgents = appData.GetVisibleComfyAgents(userId);
+                await Task.Delay(500);
+                userAgents = appData.GetVisibleComfyAgents()
+                    .Where(x => x.UserId == userId)
+                    .ToList();
             } while (userAgents.Count == 0 || userAgents.Max(x => x.ModifiedDate) < startedAt || DateTime.UtcNow - startedAt < waitFor);
         }
-        
+
+        var activeAgents = appData.GetVisibleComfyAgents();
+        var userDevices = await Db.SelectAsync<ComfyAgent>(x => x.UserId == userId);
+        userDevices.Each(agent =>
+        {
+            var activeAgent = activeAgents.FirstOrDefault(x => x.DeviceId == agent.DeviceId);
+            agent.LastUpdate = activeAgent?.LastUpdate ?? agent.ModifiedDate;
+            if (activeAgent != null)
+            {
+                agent.LastUpdate = activeAgent.LastUpdate;
+            }
+            else
+            {
+                agent.OfflineDate = agent.LastUpdate = agent.ModifiedDate;
+                agent.Gpus.Each(gpu => gpu.Used = 0);
+            }
+        });
+        var results = userDevices.Map(x => x.ConvertTo<OwnerAgentInfo>());
         return new QueryResponse<OwnerAgentInfo>
         {
             Total = appData.ComfyAgents.Count,
-            Results = appData.GetVisibleComfyAgents(userId)
-                .Map(x => x.ConvertTo<OwnerAgentInfo>()),
+            Results = results,
         };
+    }
+
+    public object Post(RemoveDevice request)
+    {
+        var userId = Request.GetRequiredUserId();
+        var agent = Db.SingleById<ComfyAgent>(request.Id);
+        if (agent == null)
+            throw HttpError.NotFound("Device not found");
+        if (agent.UserId != userId && !Request.GetClaimsPrincipal().IsAdmin())
+            throw HttpError.Conflict("Device does not belong to you");
+
+        appData.RemoveAgent(agent.DeviceId);
+        agentManager.RemoveAgent(agent.DeviceId);
+        Db.DeleteById<ComfyAgent>(request.Id);
+        
+        return new EmptyResponse();
     }
     
     public async Task<object> GetAsync(GetComfyTasks request)
@@ -157,6 +208,29 @@ public class ComfyServices(ILogger<ComfyServices> log,
         {
             Result = info
         };
+    }
+
+    public async Task Get(DownloadWorkflowVersion request)
+    {
+        var version = await Db.SingleByIdAsync<WorkflowVersion>(request.Id)
+            ?? throw HttpError.NotFound("Workflow not found");
+        var name = version.Name
+           ?? await Db.ScalarAsync<string>(Db.From<Workflow>()
+               .Where(x => x.Id == version.ParentId)
+               .Select(x => x.Name))
+           ?? "Workflow";
+        var fileName = $"{name}.json";
+        
+        var json = JSON.stringify(version.Workflow);
+
+        Response.ContentType = "application/json";
+        Response.AddHeader(HttpHeaders.ContentDisposition,
+            $"attachment; {HttpExt.GetDispositionFileName(fileName)}; size={json.Length}; " +
+            $"creation-date={version.CreatedDate.ToString("R").Replace(",", "")}; " +
+            $"modification-date={version.ModifiedDate.ToString("R").Replace(",", "")}; "
+        );
+        await Response.OutputStream.WriteAsync(json);
+        await Response.EndRequestAsync();
     }
 
     public async Task<WorkflowInfo> GetWorkflowInfoAsync(string path)
@@ -715,9 +789,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
         return new GetWorkflowGenerationResponse
         {
             Result = gen,
-            Artifacts = isAdmin 
-                ? artifacts
-                : artifacts.Where(x => x.PublishedDate != null).ToList(),
+            Artifacts = artifacts,
         };
     }
 
@@ -736,6 +808,108 @@ public class ComfyServices(ILogger<ComfyServices> log,
         }, where:x => x.Id == request.GenerationId);
         
         return new EmptyResponse();
+    }
+
+    public object Post(PinToWorkflowVersion request)
+    {
+        using var db = Db;
+        var now = DateTime.UtcNow;
+        var userId = Request.GetRequiredUserId();
+
+        db.UpdateOnly(() => new WorkflowVersion {
+            PosterImage = request.PosterImage,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        }, where:x => x.Id == request.VersionId);
+
+        return new EmptyResponse();
+    }
+
+    public async Task<object> Post(FeatureArtifact request)
+    {
+        var now = DateTime.UtcNow;
+        var userId = Request.GetRequiredUserId();
+
+        if (appData.Config.FeaturedUserIds.Length > 0)
+        {
+            await Db.UpdateOnlyAsync(() => new Artifact {
+                ModifiedBy = userId,
+                ModifiedDate = now,
+                PublishedBy = appData.Config.FeaturedUserIds[0],
+            }, where:x => x.Id == request.ArtifactId);
+        }
+
+        return await Db.SingleByIdAsync<Artifact>(request.ArtifactId);
+    }
+
+    public async Task<object> Post(UnFeatureArtifact request)
+    {
+        var now = DateTime.UtcNow;
+        var userId = Request.GetRequiredUserId();
+
+        await Db.UpdateOnlyAsync(() => new Artifact {
+            ModifiedBy = userId,
+            ModifiedDate = now,
+            PublishedBy = appData.Config.SystemUserId,
+        }, where:x => x.Id == request.ArtifactId);
+
+        return await Db.SingleByIdAsync<Artifact>(request.ArtifactId);
+    }
+
+    public async Task<object> Post(UpdateWorkflowVersion request)
+    {
+        using var db = Db;
+        var now = DateTime.UtcNow;
+        var userId = Request.GetRequiredUserId();
+        
+        var workflowVersion = db.SingleById<WorkflowVersion>(request.VersionId);
+        if (Request.Files.Length == 0)
+            throw HttpError.BadRequest("No file uploaded");
+
+        var workflowJson = await Request.Files[0].InputStream.ReadToEndAsync();
+
+        var parsedWorkflow = appData.ParseWorkflow(workflowJson, workflowVersion.Name ?? "Unknown")
+            ?? throw HttpError.BadRequest("Failed to parse workflow");
+        
+        var updated = await db.UpdateOnlyAsync(() => new WorkflowVersion {
+            Workflow = parsedWorkflow.Workflow,
+            Info = parsedWorkflow.Info,
+            Nodes = parsedWorkflow.Nodes,
+            Assets = parsedWorkflow.Assets,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        }, where:x => x.Id == request.VersionId);
+
+        return new UpdateWorkflowVersionResponse
+        {
+            VersionId = request.VersionId,
+            Updated = updated,
+            Nodes = parsedWorkflow.Nodes,
+            Assets = parsedWorkflow.Assets,
+            Info = parsedWorkflow.Info,
+        };
+    }
+
+    public async Task<object> Post(ParseWorkflow request)
+    {
+        var uploadedFile = Request!.Files.Length > 0
+            ? Request.Files[0]
+            : null;
+        var workflowJson = request.Json 
+            ?? (uploadedFile != null
+                ? await Request.Files[0].InputStream.ReadToEndAsync()
+                : null)
+            ?? throw HttpError.BadRequest("No Workflow provided");
+        
+        var workflowName = request.Name
+            ?? uploadedFile?.FileName.LastRightPart('/').LastLeftPart('.')
+            ?? $"Unknown ({workflowJson.Length})";
+
+        workflowName = StringFormatters.FormatName(workflowName);
+        var workflow = workflowJson.ParseAsObjectDictionary();
+        var parsedWorkflow = appData.ParseWorkflow(workflowJson, workflowName)
+            ?? throw HttpError.BadRequest("Failed to parse workflow");
+        return parsedWorkflow;
     }
 }
 

@@ -270,12 +270,14 @@ public class AgentServices(ILogger<AgentServices> log,
                 RequirePip = appData.RequirePip,
                 RequireNodes = appData.RequireNodes,
                 RequireModels = appData.RequireModels,
+                DevicePool = DateTime.UtcNow,
             };
         }
         
         agent.LastUpdate = DateTime.UtcNow;
 
         agent.Version = request.Version;
+        agent.ComfyVersion = request.ComfyVersion;
         agent.Gpus = request.Gpus;
         agent.NodeDefs = nodeDefs;
         agent.Nodes = sorted(nodeDefs.Keys.Where(x => !appData.DefaultGatewayNodes.Contains(x)));
@@ -346,7 +348,7 @@ public class AgentServices(ILogger<AgentServices> log,
         {
             DeviceId = request.DeviceId,
             ApiKey = Request.GetBearerToken(),
-            Nodes = nodeDefs.Keys.ToList(),
+            // Nodes = nodeDefs.Keys.ToList(),
             Categories = appData.CategoryNames,
             RequirePip = appData.RequirePip,
             RequireNodes = appData.RequireNodes,

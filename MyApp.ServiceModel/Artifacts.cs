@@ -14,7 +14,9 @@ public class QueryArtifacts : QueryDb<Artifact>
     public List<Rating>? Ratings { get; set; }
     public string? Category { get; set; }
     public string? Tag { get; set; }
+    public int? VersionId { get; set; }
     public int? Similar { get; set; }
+    public string? UserId { get; set; }
 }
 
 [Tag(Tags.Artifacts)]

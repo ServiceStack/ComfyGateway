@@ -98,6 +98,16 @@ public class CreateComment : ICreateDb<Comment>, IReturn<Comment>
 
 [Tag(Tags.Posts)]
 [ValidateIsAuthenticated, ValidateActiveUser]
+public class CreateGenerationComment : IPost, IReturn<Comment>
+{
+    public string GenerationId { get; set; }
+    public int? ReplyId { get; set; }
+    [ValidateLength(1,280)]
+    public string Content { get; set; }
+}
+
+[Tag(Tags.Posts)]
+[ValidateIsAuthenticated, ValidateActiveUser]
 [AutoApply(Behavior.AuditModify)]
 [AutoFilter(QueryTerm.Ensure, nameof(Comment.UserId), Eval = "userAuthId()")]
 public class UpdateComment : IPatchDb<Comment>, IReturn<Comment>

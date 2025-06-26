@@ -46,6 +46,47 @@ public class Migration1007 : MigrationBase
             EXECUTE PROCEDURE update_artifact_reactions();
             """);
         
+        // -- Update the reactions count for the affected WorkflowVersion(s)
+        Db.ExecuteNonQuery(
+            """
+            CREATE OR REPLACE FUNCTION update_workflow_version_reactions()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE "WorkflowVersion" 
+                SET "Reactions" = (
+                    SELECT COALESCE(
+                        jsonb_object_agg(chr("Reaction"), count), 
+                        '{}'::jsonb
+                    )
+                    FROM (
+                        SELECT 
+                            "Reaction", 
+                            COUNT(*)::int as count
+                        FROM "WorkflowVersionReaction" 
+                        WHERE "VersionId" = COALESCE(NEW."VersionId", OLD."VersionId")
+                        GROUP BY "Reaction"
+                    ) counts
+                ),
+                "ReactionsCount" = (
+                    SELECT COUNT(*)::int
+                    FROM "WorkflowVersionReaction" 
+                    WHERE "VersionId" = COALESCE(NEW."VersionId", OLD."VersionId")
+                ),
+                "ModifiedDate" = NOW()
+                WHERE "Id" = COALESCE(NEW."VersionId", OLD."VersionId");
+                
+                RETURN COALESCE(NEW, OLD);
+            END;
+            $$ LANGUAGE plpgsql;            
+            """);
+        Db.ExecuteNonQuery(
+            """
+            CREATE OR REPLACE TRIGGER workflow_version_reactions_trigger
+            AFTER INSERT OR UPDATE OR DELETE ON "WorkflowVersionReaction"
+            FOR EACH ROW
+            EXECUTE PROCEDURE update_workflow_version_reactions();
+            """);
+
         // -- Update the reactions count for the affected Thread(s)
         Db.ExecuteNonQuery(
             """
@@ -71,7 +112,8 @@ public class Migration1007 : MigrationBase
                     SELECT COUNT(*)::int
                     FROM "ThreadReaction" 
                     WHERE "ThreadId" = COALESCE(NEW."ThreadId", OLD."ThreadId")
-                )
+                ),
+                "ModifiedDate" = NOW()
                 WHERE "Id" = COALESCE(NEW."ThreadId", OLD."ThreadId");
                 
                 RETURN COALESCE(NEW, OLD);
@@ -111,7 +153,8 @@ public class Migration1007 : MigrationBase
                     SELECT COUNT(*)::int
                     FROM "CommentReaction" 
                     WHERE "CommentId" = COALESCE(NEW."CommentId", OLD."CommentId")
-                )
+                ),
+                "ModifiedDate" = NOW()
                 WHERE "Id" = COALESCE(NEW."CommentId", OLD."CommentId");
                 
                 RETURN COALESCE(NEW, OLD);

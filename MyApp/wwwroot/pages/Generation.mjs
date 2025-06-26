@@ -2,16 +2,18 @@ import { ref, computed, onMounted, onUnmounted, inject } from "vue"
 import { useRoute } from "vue-router"
 import { useClient, useFormatters, useUtils } from "@servicestack/vue"
 import { $1, leftPart, lastRightPart } from "@servicestack/client"
-import { QueryComments, CreateComment } from "../mjs/dtos.mjs"
+import { QueryComments, CreateGenerationComment } from "../mjs/dtos.mjs"
 import VisibilityIcon from "./components/VisibilityIcon.mjs"
 import ArtifactMenu from "./components/ArtifactMenu.mjs"
 import ArtifactReactions from "./components/ArtifactReactions.mjs"
+import RatingsBadge from "./components/RatingsBadge.mjs"
 
 export default {
     components: {
         VisibilityIcon,
         ArtifactMenu,
         ArtifactReactions,
+        RatingsBadge,
     },
     template:`
         <ErrorSummary :status="error" />
@@ -25,14 +27,14 @@ export default {
             <!-- Main Panel -->
             <div class="flex-1 min-w-0">
                 <!-- Main Image Display bg-white dark:bg-gray-800 -->
-                <div class="rounded-lg shadow-lg overflow-hidden mb-4">
+                <div v-if="selectedArtifact" class="rounded-lg shadow-lg overflow-hidden mb-4">
                     <div class="flex items-center justify-center relative"
                          :class="[{ 'aspect-square': !store.prefs.zoomIn, }, !selectedArtifact.color ? 'bg-gray-100 dark:bg-gray-700' : '']" 
                          :style="selectedArtifact.color ? 'background-color:' + selectedArtifact.color : ''"
                          @contextmenu.prevent.stop="showContextMenu($event, selectedArtifact)"
                          >
                         <!-- Main Image - only show if rating is viewable -->
-                        <img v-if="selectedUrl && selectedArtifact && isRatingViewable(selectedArtifact)"
+                        <img v-if="selectedUrl && store.isRatingViewable(selectedArtifact)"
                              :src="selectedUrl"
                              :alt="selectedArtifact.caption || generation.description || 'Generated image'"
                              class="max-w-full max-h-full object-contain"
@@ -44,11 +46,7 @@ export default {
                             <div class="text-center max-w-lg">
                                 <!-- Large Rating Tag -->
                                 <div class="flex justify-center mb-6">
-                                    <span class="inline-flex items-center rounded-md px-6 py-3 text-lg font-bold ring-1 ring-inset transition-all duration-200 cursor-default"
-                                          :class="getRatingColorClass(getRatingDisplay(selectedArtifact))"
-                                          :title="getRatingDescription(getRatingDisplay(selectedArtifact))">
-                                        {{ getRatingDisplay(selectedArtifact) }}
-                                    </span>
+                                    <RatingsBadge :artifact="selectedArtifact" size="lg" />
                                 </div>
                                 <h3 class="text-xl font-semibold mb-3">Restricted Content</h3>
                                 <p class="text-sm text-gray-300 mb-4">
@@ -65,10 +63,10 @@ export default {
                             </svg>
                         </div>
                     </div>
-                    <ArtifactReactions class="mb-2 max-w-sm mx-auto" :artifact="selectedArtifact" @changed="selectedArtifact.reactions = $event.reactions" />
+                    <ArtifactReactions class="my-1 max-w-sm mx-auto" :artifact="selectedArtifact" @changed="selectedArtifact.reactions = $event.reactions" />
                 </div>
 
-                <div v-if="selectedArtifact.description" class="p-4 text-sm text-gray-600 dark:text-gray-400">
+                <div v-if="selectedArtifact?.description" class="p-4 text-sm text-gray-600 dark:text-gray-400">
                     {{selectedArtifact.description}}
                 </div>
 
@@ -151,7 +149,7 @@ export default {
                              class="bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-blue-500 relative"
                              :class="{ 'ring-2 ring-blue-500': artifact.url === selectedUrl }"
                              @click="selectedUrl = artifact.url">
-                            <img v-if="isRatingViewable(artifact)"
+                            <img v-if="store.isRatingViewable(artifact)"
                                  :src="artifact.url"
                                  :alt="'Artifact ' + artifact.id"
                                  class="w-full object-cover">
@@ -160,11 +158,7 @@ export default {
                             <div v-else class="w-full h-full py-8 text-center bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-2">
                                 <!-- Large Rating Tag -->
                                 <div class="flex justify-center mb-2">
-                                    <span class="inline-flex items-center rounded-md px-2 py-1 text-sm font-bold ring-1 ring-inset transition-all duration-200 cursor-default"
-                                          :class="getRatingColorClass(getRatingDisplay(artifact))"
-                                          :title="getRatingDescription(getRatingDisplay(artifact))">
-                                        {{ getRatingDisplay(artifact) }}
-                                    </span>
+                                    <RatingsBadge :artifact="artifact" />
                                 </div>
                                 <span class="text-xs text-gray-400">Restricted Content</span>
                             </div>
@@ -183,13 +177,9 @@ export default {
                     <div class="mb-4">
                         <div class="flex flex-wrap gap-2">
                             <!-- Rating Tag -->
-                            <div v-if="getRatingDisplay(selectedArtifact)">
+                            <div v-if="selectedArtifact.rating">
                                 <div class="flex flex-wrap gap-2">
-                                    <span class="inline-flex items-center rounded-md px-3 py-1 text-xs font-bold ring-1 ring-inset transition-all duration-200 cursor-default"
-                                          :class="getRatingColorClass(getRatingDisplay(selectedArtifact))"
-                                          :title="getRatingDescription(getRatingDisplay(selectedArtifact))">
-                                        {{ getRatingDisplay(selectedArtifact) }}
-                                    </span>
+                                    <RatingsBadge :artifact="selectedArtifact" />
                                 </div>
                             </div>
                             <!-- Categories Section -->
@@ -233,12 +223,23 @@ export default {
                                 <!-- Text content -->
                                 <span class="relative z-10">{{ tag }}</span>
                             </RouterLink>
+                        </div>
+                        <div class="mt-2 flex items-center">
                             
                             <RouterLink :to="{ path:'/images', query: { similar: selectedArtifact.id } }"
-                                class="text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400"
+                                class="flex items-center gap-x-1 text-sm text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400"
                                 title="Explore Similar Images">
-                                <svg class="size-5.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"></path></svg>
+                                <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"></path></svg>
+                                <span>explore similar</span>
                             </RouterLink>
+                            
+                            <RouterLink :to="{ path:'/images', query: { user: selectedArtifact.createdBy } }"
+                                class="ml-2 flex items-center gap-x-1 text-sm text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400"
+                                title="Explore User Images">
+                                <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a5 5 0 1 1-5 5l.005-.217A5 5 0 0 1 12 2m2 12a5 5 0 0 1 5 5v1a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-1a5 5 0 0 1 5-5z"/></svg>
+                                <span>by user</span>
+                            </RouterLink>
+                        
                         </div>
                     </div>
 
@@ -401,7 +402,7 @@ export default {
         })
 
         function formatFieldName(field) {
-            return field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())
+            return field.replace('_', ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())
         }
 
         function formatFieldValue(value) {
@@ -412,59 +413,17 @@ export default {
             return value?.toString() || ''
         }
 
-        function getRatingDisplay(artifact) {
-            // Check for direct rating first, then predicted rating
-            if (artifact.rating) {
-                // Convert rating enum value to string
-                const ratingMap = { 1: 'PG', 2: 'PG13', 4: 'M', 8: 'R', 16: 'X', 32: 'XXX' }
-                const ret = ratingMap[artifact.rating] || artifact.rating.toString()
-                return ret === 'PG13' ? 'PG-13' : ret
-            }
-            return artifact.ratings?.predictedRating || null
-        }
-
-        function isAdultRating(rating) {
-            return ['R', 'X', 'XXX'].includes(rating)
-        }
-
-        function isRatingViewable(artifact) {
-            const rating = getRatingDisplay(artifact)
-            const useRating = rating === 'PG-13' ? 'PG13' : rating
-            const isViewable = !rating || store.selectedRatings.includes(useRating)
-            return isViewable
-        }
-
-        function getRatingColorClass(rating) {
-            if (['R', 'X', 'XXX'].includes(rating)) {
-                // Adult ratings - Red
-                return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 ring-red-600/40 dark:ring-red-400/50'
-            } else if (rating === 'M') {
-                // Mature rating - Orange/Amber
-                return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 ring-amber-600/40 dark:ring-amber-400/50'
-            } else {
-                // Safe ratings (PG, PG13) - Green
-                return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 ring-green-600/40 dark:ring-green-400/50'
-            }
-        }
-
-        function getRatingDescription(rating) {
-            const descriptions = {
-                'PG': 'Safe for work, family friendly content',
-                'PG13': 'Teen appropriate content, mildly suggestive',
-                'M': 'Mature content, strong language, suggestive content',
-                'R': 'R-rated adult themes, strong language, partial nudity',
-                'X': 'NSFW, Explicit sexual content, graphic nudity',
-                'XXX': 'NSFW, Extreme explicit content, hardcore pornography'
-            }
-            return descriptions[rating] || 'Content rating'
-        }
-
         async function loadComments() {
-            if (!generation.value?.threadId) return
+            let threadId = generation.value?.publicThreadId
+            if (!threadId) {
+                await loadGeneration()
+                threadId = generation.value?.publicThreadId
+                if (!threadId) return
+            }
 
             loadingComments.value = true
             try {
-                const api = await client.api(new QueryComments({ threadId: generation.value.threadId }))
+                const api = await client.api(new QueryComments({ threadId }))
                 if (api.succeeded) {
                     comments.value = api.response?.results || []
                 }
@@ -480,8 +439,8 @@ export default {
 
             submittingComment.value = true
             try {
-                const api = await client.api(new CreateComment({
-                    threadId: generation.value.threadId,
+                const api = await client.api(new CreateGenerationComment({
+                    generationId: generation.value.id,
                     content: newComment.value.trim()
                 }))
 
@@ -502,13 +461,17 @@ export default {
             copiedDescription.value = true
             setTimeout(() => copiedDescription.value = false, 3000)
         }
-
-        onMounted(async () => {
+        
+        async function loadGeneration() {
             error.value = null
             const api = await store.getWorkflowGeneration(route.params.id)
             generation.value = api.response?.result
             artifacts.value = api.response?.artifacts ?? []
             error.value = api.error
+        }
+
+        onMounted(async () => {
+            await loadGeneration()
             document.addEventListener("keydown", handleKeydown)
 
             // Set the selected URL, preferring posterImage, then first artifact URL
@@ -529,8 +492,8 @@ export default {
                 selectedRatings: store.selectedRatings,
                 artifactRatings: artifacts.value.map(a => ({
                     url: a.url,
-                    rating: getRatingDisplay(a),
-                    isViewable: isRatingViewable(a)
+                    rating: a.rating || 'Unrated',
+                    isViewable: store.isRatingViewable(a)
                 }))
             })
 
@@ -607,11 +570,6 @@ export default {
             formatFieldName,
             formatFieldValue,
             formatDate,
-            getRatingDisplay,
-            isAdultRating,
-            isRatingViewable,
-            getRatingColorClass,
-            getRatingDescription,
             loadComments,
             submitComment,
             copyDescription,

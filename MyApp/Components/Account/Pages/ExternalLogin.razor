@@ -37,6 +37,13 @@
 
                 <div class="flex flex-col gap-4">
                     <div>
+                        <label for="userName" class="@TextInput.LabelClasses">Username</label>
+                        <div class="mt-1 relative">
+                            <InputText id="userName" type="text" @bind-Value="Input.UserName" class="@TextInput.InputClasses" autocomplete="username" placeholder="Please enter your username." />
+                        </div>
+                        <ValidationMessage For="() => Input.UserName" class="mt-2 text-danger text-sm" />
+                    </div>
+                    <div>
                         <label for="email" class="@TextInput.LabelClasses">Email</label>
                         <div class="mt-1 relative">
                             <InputText id="email" type="text" @bind-Value="Input.Email" class="@TextInput.InputClasses" autocomplete="email" placeholder="Please enter your email." />
@@ -138,7 +145,7 @@
         var emailStore = GetEmailStore();
         var user = CreateUser();
 
-        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
+        await UserStore.SetUserNameAsync(user, Input.UserName, CancellationToken.None);
         await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
 
         var result = await UserManager.CreateAsync(user);
@@ -196,6 +203,9 @@
 
     private sealed class InputModel
     {
+        [Required]
+        public string UserName { get; set; } = "";
+
         [Required]
         [EmailAddress]
         public string Email { get; set; } = "";

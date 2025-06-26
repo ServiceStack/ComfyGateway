@@ -363,6 +363,11 @@ public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFa
         log.LogInformation("Reloaded {Count} pending tasks (generate {OllamaGenerateTasks}, chat {OpenAiChatTasks})", 
             AiTasks.Count, pendingOllamaGenerateTasks.Count, pendingOpenAiChatTasks.Count);
     }
+
+    public void RemoveAgent(string deviceId)
+    {
+        agentTaskQueues.TryRemove(deviceId, out _);
+    }
 }
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events

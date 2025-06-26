@@ -16,13 +16,28 @@
 <div class="flex justify-between">
     <Heading3>Profile</Heading3>
 
-    <form action="Account/Logout" method="post" onsubmit="preSignOut()">
-        <AntiforgeryToken />
-        <input type="hidden" name="ReturnUrl" value="" />
-        <SecondaryButton type="submit">
-            Sign Out
-        </SecondaryButton>
-    </form>
+    <div class="flex gap-x-2">
+        <div>
+            <SecondaryButton id="btnReset">Reset Caches</SecondaryButton>
+            <script type="module">
+                import store from "/pages/lib/store.mjs"
+                document.querySelector('#btnReset').onclick = function() {
+                    if (confirm('Sign out and clear all caches?\n\nPlease close all other windows before continuing.')) {
+                        console.log('reset store', store)
+                        store.resetAndDestroy().then(() =>
+                            document.querySelector('#formLogout').submit())
+                    }
+                };
+            </script>
+        </div>
+        <form id="formLogout" action="Account/Logout" method="post" onsubmit="preSignOut()">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="" />
+            <SecondaryButton type="submit">
+                Sign Out
+            </SecondaryButton>
+        </form>
+    </div>
 </div>
 
 <div class="max-w-xl">
@@ -135,7 +150,7 @@
 
     private async Task<string> SaveAvatarAsync(IBrowserFile file, string currentUsername)
     {
-        var relativePath = $"/avatars/{currentUsername[..2]}/{currentUsername}.png";
+        var relativePath = $"/avatars/{currentUsername[..2]}/{currentUsername}.webp";
         var avatarPath = WebHostEnvironment.WebRootPath.CombineWith(relativePath);
 
         avatarPath.LastLeftPart('/').AssertDir();
