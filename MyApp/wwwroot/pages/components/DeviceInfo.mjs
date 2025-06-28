@@ -26,7 +26,7 @@ export default {
     <div :key="device.id"
          class="relative bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-200">
 
-        <CloseButton v-if="device.userId == store.userId || store.isAdmin" class="-mt-3 -mr-3" buttonClass="dark:bg-gray-800" title="Remove offline device" @close="removeDevice" />
+        <CloseButton v-if="(device.userId == store.userId || store.isAdmin) && getDeviceStatus(device) !== 'Online'" class="-mt-3 -mr-3" buttonClass="dark:bg-gray-800" title="Remove offline device" @close="removeDevice" />
 
         <!-- Device Header -->
         <div class="px-4 py-5 sm:p-6">

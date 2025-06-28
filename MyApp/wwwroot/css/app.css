@@ -436,9 +436,6 @@
   .right-0\.5 {
     right: calc(var(--spacing) * 0.5);
   }
-  .right-1 {
-    right: calc(var(--spacing) * 1);
-  }
   .right-2 {
     right: calc(var(--spacing) * 2);
   }
@@ -492,9 +489,6 @@
   }
   .z-0 {
     z-index: 0;
-  }
-  .z-1 {
-    z-index: 1;
   }
   .z-10 {
     z-index: 10;
@@ -589,9 +583,6 @@
   .mx-1 {
     margin-inline: calc(var(--spacing) * 1);
   }
-  .mx-2 {
-    margin-inline: calc(var(--spacing) * 2);
-  }
   .mx-3 {
     margin-inline: calc(var(--spacing) * 3);
   }
@@ -631,23 +622,11 @@
   .-mt-1 {
     margin-top: calc(var(--spacing) * -1);
   }
-  .-mt-2 {
-    margin-top: calc(var(--spacing) * -2);
-  }
   .-mt-2\.5 {
     margin-top: calc(var(--spacing) * -2.5);
   }
   .-mt-3 {
     margin-top: calc(var(--spacing) * -3);
-  }
-  .-mt-4 {
-    margin-top: calc(var(--spacing) * -4);
-  }
-  .-mt-5 {
-    margin-top: calc(var(--spacing) * -5);
-  }
-  .-mt-6 {
-    margin-top: calc(var(--spacing) * -6);
   }
   .-mt-7 {
     margin-top: calc(var(--spacing) * -7);
@@ -700,14 +679,8 @@
   .mt-auto {
     margin-top: auto;
   }
-  .-mr-2 {
-    margin-right: calc(var(--spacing) * -2);
-  }
   .-mr-3 {
     margin-right: calc(var(--spacing) * -3);
-  }
-  .-mr-4 {
-    margin-right: calc(var(--spacing) * -4);
   }
   .-mr-28 {
     margin-right: calc(var(--spacing) * -28);
@@ -859,10 +832,6 @@
   .aspect-video {
     aspect-ratio: var(--aspect-video);
   }
-  .size-3 {
-    width: calc(var(--spacing) * 3);
-    height: calc(var(--spacing) * 3);
-  }
   .size-3\.5 {
     width: calc(var(--spacing) * 3.5);
     height: calc(var(--spacing) * 3.5);
@@ -875,10 +844,6 @@
     width: calc(var(--spacing) * 5);
     height: calc(var(--spacing) * 5);
   }
-  .size-5\.5 {
-    width: calc(var(--spacing) * 5.5);
-    height: calc(var(--spacing) * 5.5);
-  }
   .size-6 {
     width: calc(var(--spacing) * 6);
     height: calc(var(--spacing) * 6);
@@ -886,10 +851,6 @@
   .size-10 {
     width: calc(var(--spacing) * 10);
     height: calc(var(--spacing) * 10);
-  }
-  .size-32 {
-    width: calc(var(--spacing) * 32);
-    height: calc(var(--spacing) * 32);
   }
   .h-0 {
     height: calc(var(--spacing) * 0);
@@ -960,9 +921,6 @@
   .max-h-24 {
     max-height: calc(var(--spacing) * 24);
   }
-  .max-h-32 {
-    max-height: calc(var(--spacing) * 32);
-  }
   .max-h-60 {
     max-height: calc(var(--spacing) * 60);
   }
@@ -1014,9 +972,6 @@
   .w-6 {
     width: calc(var(--spacing) * 6);
   }
-  .w-7 {
-    width: calc(var(--spacing) * 7);
-  }
   .w-8 {
     width: calc(var(--spacing) * 8);
   }
@@ -1040,9 +995,6 @@
   }
   .w-24 {
     width: calc(var(--spacing) * 24);
-  }
-  .w-28 {
-    width: calc(var(--spacing) * 28);
   }
   .w-32 {
     width: calc(var(--spacing) * 32);
@@ -1094,15 +1046,6 @@
   }
   .max-w-24 {
     max-width: calc(var(--spacing) * 24);
-  }
-  .max-w-32 {
-    max-width: calc(var(--spacing) * 32);
-  }
-  .max-w-40 {
-    max-width: calc(var(--spacing) * 40);
-  }
-  .max-w-44 {
-    max-width: calc(var(--spacing) * 44);
   }
   .max-w-\[180rem\] {
     max-width: 180rem;
@@ -1448,9 +1391,6 @@
       margin-inline-end: calc(calc(var(--spacing) * 8) * calc(1 - var(--tw-space-x-reverse)));
     }
   }
-  .gap-y-1 {
-    row-gap: calc(var(--spacing) * 1);
-  }
   .gap-y-4 {
     row-gap: calc(var(--spacing) * 4);
   }
@@ -1766,9 +1706,6 @@
   }
   .bg-gray-800 {
     background-color: var(--color-gray-800);
-  }
-  .bg-gray-900 {
-    background-color: var(--color-gray-900);
   }
   .bg-gray-900\/50 {
     background-color: color-mix(in srgb, oklch(21% 0.034 264.665) 50%, transparent);
@@ -3888,16 +3825,6 @@
       width: calc(var(--spacing) * 8);
     }
   }
-  .sm\:w-28 {
-    @media (width >= 40rem) {
-      width: calc(var(--spacing) * 28);
-    }
-  }
-  .sm\:w-32 {
-    @media (width >= 40rem) {
-      width: calc(var(--spacing) * 32);
-    }
-  }
   .sm\:w-44 {
     @media (width >= 40rem) {
       width: calc(var(--spacing) * 44);
@@ -5366,6 +5293,11 @@
       --tw-ring-offset-color: var(--color-green-200);
     }
   }
+  .dark\:ring-offset-green-900 {
+    &:where(.dark, .dark *) {
+      --tw-ring-offset-color: var(--color-green-900);
+    }
+  }
   .dark\:outline-gray-700 {
     &:where(.dark, .dark *) {
       outline-color: var(--color-gray-700);
@@ -5861,6 +5793,13 @@
     &:where(.dark, .dark *) {
       &:focus {
         --tw-ring-color: var(--color-cyan-500);
+      }
+    }
+  }
+  .dark\:focus\:ring-green-300 {
+    &:where(.dark, .dark *) {
+      &:focus {
+        --tw-ring-color: var(--color-green-300);
       }
     }
   }

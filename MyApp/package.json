@@ -13,5 +13,9 @@
         "rerun:last": "npm run revert:last && npm run migrate",
         "metadata": "dotnet run --AppTasks=metadata",
         "adhoc": "dotnet run --AppTasks=adhoc"
+    },
+    "devDependencies": {
+        "@servicestack/client": "^2.1.11",
+        "@servicestack/vue": "^3.0.125"
     }
 }

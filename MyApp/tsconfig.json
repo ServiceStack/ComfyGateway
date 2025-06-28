@@ -3,8 +3,17 @@
     "target": "ESNext",
     "sourceMap": true,
     "baseUrl": "./",
-    "typeRoots": ["./wwwroot/lib/typings"],
+    "typeRoots": [
+      "./wwwroot/lib/typings"
+    ],
     "experimentalDecorators": true,
+    "allowJs": true,
+    "noEmit": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "paths": {
         "*": [
             "./wwwroot/lib/*",
@@ -12,9 +21,14 @@
         ],
         "vue": [ "./wwwroot/lib/typings/vue/index.d.ts" ],
         "@servicestack/client": [ "./wwwroot/lib/typings/@servicestack/client/index.d.ts" ],
-        "@servicestack/vue": [ "./wwwroot/lib/typings/@servicestack/vue/index.d.ts" ]
+        "@servicestack/vue": [ 
+          "./wwwroot/lib/typings/@servicestack/vue/index.d.ts" 
+        ]
     }
   },
+  "files": [
+    "./components.d.ts"
+  ],
   "exclude": [
     "node_modules"
   ]
