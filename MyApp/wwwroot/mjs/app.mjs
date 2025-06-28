@@ -11,6 +11,7 @@ const routes = [
     { path: '/images/:path?', component: () => import('../pages/Images.mjs') },
     { path: '/gallery/:path?', component: () => import('../pages/Images.mjs') },
     { path: '/generations/:id?', component: () => import('../pages/Generation.mjs') },
+    { path: '/test/:path?', component: () => import('../pages/Test.mjs') },
 ]
 const router = createRouter({
     history: createWebHistory(),
