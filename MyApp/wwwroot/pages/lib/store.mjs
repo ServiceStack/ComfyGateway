@@ -264,7 +264,7 @@ let o = {
             const openRequest = indexedDB.open(dbName);
             openRequest.onsuccess = function(event) {
                 const db = event.target.result;
-                if (!db.objectStoreNames) {
+                if (!db.objectStoreNames?.length) {
                     resolve('No object stores found');
                     return;
                 }
