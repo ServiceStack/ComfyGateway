@@ -15,6 +15,7 @@ App_Data/
 Configure.secrets.cs
 tailwindcss
 tailwindcss.exe
+to-api-prompt
 .DS_Store
 
 # User-specific files
