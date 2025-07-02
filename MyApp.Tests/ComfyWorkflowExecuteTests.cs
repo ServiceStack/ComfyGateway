@@ -23,7 +23,8 @@ namespace MyApp.Tests;
 public class ComfyWorkflowExecuteTests
 {
     private IServiceProvider serviceProvider;
-    string ComfyEndpoint = "http://localhost:7860";
+    // string ComfyEndpoint = "http://localhost:7860";
+    string ComfyEndpoint = "http://localhost:8188";
     private string ApiKey = Environment.GetEnvironmentVariable("AI_SERVER_API_KEY");
     Dictionary<string, NodeInfo> NodeDefs;
 
@@ -39,14 +40,17 @@ public class ComfyWorkflowExecuteTests
 
     ComfyGateway CreateGateway() => new(NullLogger<ComfyGateway>.Instance, serviceProvider.GetRequiredService<IHttpClientFactory>(), ComfyMetadata.Instance);
 
-    private async Task<string> CreateApiPrompt(string workflowPath)
+    private async Task<ApiPrompt> CreateApiPrompt(string workflowPath)
     {
         var workflowFullPath = Path.Combine(AppContext.BaseDirectory, $"../../../workflows/{workflowPath}");
         var workflowJson = await File.ReadAllTextAsync(workflowFullPath);
 
         var prompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflowJson.ParseAsObjectDictionary(), NodeDefs);
-        return prompt.ToJson();
+        return prompt;
     }
+
+    private async Task<string> CreateApiPromptJson(string workflowPath) =>
+        (await CreateApiPrompt(workflowPath)).ToJson();
 
     private async Task<string> ExecutePrompt(string promptJson)
     {
@@ -119,7 +123,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_basic_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/basic.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/basic.json");
         Console.WriteLine(promptJson);
 
         // Verify the converted JSON is valid and contains expected elements
@@ -220,7 +224,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_DreamshaperXL_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/dreamshaperXL.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/dreamshaperXL.json");
 
         var responseJson = await ExecutePrompt(promptJson);
         Console.WriteLine(responseJson);
@@ -229,7 +233,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_FluxSchnell_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/flux1-schnell.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/flux1-schnell.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -239,7 +243,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_Hidream_Dev_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/hidream_i1_dev_fp8.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/hidream_i1_dev_fp8.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -249,7 +253,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_JibMixRealisticXL_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/jibMixRealisticXL.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/jibMixRealisticXL.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -259,7 +263,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_JuggernautXL_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/juggernautXL.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/juggernautXL.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -269,7 +273,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_RealvisXL_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/realvisxl.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/realvisxl.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -279,7 +283,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_SD35_Large_FP8_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/sd3.5_large_fp8_scaled.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/sd3.5_large_fp8_scaled.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -289,7 +293,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_SD35_Large_Turbo_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/sd3.5_large_turbo.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/sd3.5_large_turbo.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -299,8 +303,19 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_SDXL_lightning_Workflow()
     {
-        var promptJson = await CreateApiPrompt("text-to-image/sdxl_lightning_4step.json");
+        var promptJson = await CreateApiPromptJson("text-to-image/sdxl_lightning_4step.json");
         Console.WriteLine(promptJson);
+
+        var responseJson = await ExecutePrompt(promptJson);
+        Console.WriteLine(responseJson);
+    }
+
+    [Test]
+    public async Task Can_execute_Smooth_Workflow()
+    {
+        var apiPrompt = await CreateApiPrompt("text-to-image/smooth_workflow_v3.json");
+        var promptJson = ClientConfig.ToSystemJson(apiPrompt);
+        // Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
         Console.WriteLine(responseJson);
@@ -310,7 +325,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_Florence2_ImageToText_Workflow()
     {
-        var promptJson = await CreateApiPrompt("image-to-text/florence2.json");
+        var promptJson = await CreateApiPromptJson("image-to-text/florence2.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -321,7 +336,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_SD15_pruned_emaonly_ImageToImage_Workflow()
     {
-        var promptJson = await CreateApiPrompt("image-to-image/sd1.5_pruned_emaonly.json");
+        var promptJson = await CreateApiPromptJson("image-to-image/sd1.5_pruned_emaonly.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -332,7 +347,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_SD15_pruned_emaonly_AudioToText_Workflow()
     {
-        var promptJson = await CreateApiPrompt("audio-to-text/transcribe-audio-whisper.json");
+        var promptJson = await CreateApiPromptJson("audio-to-text/transcribe-audio-whisper.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);
@@ -343,7 +358,7 @@ public class ComfyWorkflowExecuteTests
     [Test]
     public async Task Can_execute_Transcribe_Whisper_VideoToText_Workflow()
     {
-        var promptJson = await CreateApiPrompt("video-to-text/transcribe-video-whisper.json");
+        var promptJson = await CreateApiPromptJson("video-to-text/transcribe-video-whisper.json");
         Console.WriteLine(promptJson);
 
         var responseJson = await ExecutePrompt(promptJson);

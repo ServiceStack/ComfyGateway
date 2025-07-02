@@ -26,6 +26,7 @@ public class AppConfig
 
     public string? GoogleClientId { get; set; }
     public string? GoogleClientSecret { get; set; }
+    public string? BunExePath { get; set; }
     
     public VueAppConfig ToVueAppConfig() => new() {
         AppName = AppName,

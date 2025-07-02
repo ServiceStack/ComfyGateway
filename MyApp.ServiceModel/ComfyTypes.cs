@@ -165,8 +165,6 @@ public class Workflow : AuditBase
     public string Name { get; set; }
     [Index(Unique = true)]
     public string Slug { get; set; }
-    [Unique]
-    public string Path { get; set; }
     public string Description { get; set; } // Markdown
     public int? PinVersionId { get; set; }
     public int? ThreadId { get; set; }
@@ -180,10 +178,15 @@ public class WorkflowVersion : AuditBase
     public int Id { get; set; }
     [ForeignKey(typeof(Workflow))]
     public int ParentId { get; set; } //ComfyWorkflow.Id
-    public string Version { get; set; }  //v1
     public string Name { get; set; }    // Version Name
+    public string Version { get; set; } // v1
+    [Unique]
+    public string Path { get; set; }    // Category/Base/Name.Version.json
     public Dictionary<string,object?> Workflow { get; set; }
     public WorkflowInfo Info { get; set; }
+    [IgnoreDataMember]
+    [PgSqlJsonB]
+    public Dictionary<string, ApiNode>? ApiPrompt { get; set; }
     public List<string> Nodes { get; set; }
     public List<string> Assets { get; set; }
     
@@ -203,9 +206,10 @@ public class WorkflowVersion : AuditBase
 public class ParsedWorkflow
 {
     public string BaseModel { get; set; }
+    public string Version { get; set; }
     public string Name => Info.Name;
     public string Category => Info.Type.ToString().Replace("To", " to ");
-    public string Path => $"{Category}/{BaseModel}/{Info.Name}.json";
+    public string Path => $"{Category}/{BaseModel}/{Info.Name}.{Version}.json";
     public List<string> Nodes { get; set; }
     public List<string> Assets { get; set; }
     public WorkflowInfo Info { get; set; }

@@ -97,6 +97,11 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     public Stream OpenArtifactStream(string fileName) => File.OpenRead(GetArtifactPath(fileName));
     public string GetArtifactPath(string fileName) => appConfig.ArtifactsPath.CombineWith(fileName[..2], fileName);
 
+    public string GetDeviceObjectInfoPath(string deviceId) => 
+        GetDevicePath(deviceId).CombineWith("object_info.json");
+    public string GetDevicePath(string deviceId) => 
+        appConfig.ArtifactsPath.CombineWith(deviceId.GetDevicePath());
+    
     ServerEvent RegisterEvent = new() { Event = "register" };
     ServerEvent HeartbeatEvent = new() { Event = "heartbeat", Data = "pulse" };
 
@@ -147,11 +152,16 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     }
 
     public string OverridesPath => Path.GetFullPath(Path.Combine(appConfig.AppDataPath, "/overrides"));
+
+    public string DefaultObjectInfoPath { get; set; }
     
     public void LoadDefaultObjectInfo()
     {
-        var json = ReadTextFile(Path.Combine(OverridesPath, "object_info.gateway.json"))
-            ?? ReadTextFile("wwwroot/data/object_info.gateway.json")
+        DefaultObjectInfoPath = Path.Combine(OverridesPath, "object_info.gateway.json");
+        if (!File.Exists(DefaultObjectInfoPath))
+            DefaultObjectInfoPath = WebRootPath.CombineWith("data/object_info.gateway.json");
+                
+        var json = ReadTextFile(DefaultObjectInfoPath)
             ?? throw new Exception("object_info.gateway.json not found");
         Metadata.LoadObjectInfo(json);
         DefaultGatewayNodes = Metadata.DefaultNodeDefinitions.Keys.ToSet();
@@ -253,17 +263,18 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         ? null 
         : Workflows.FirstOrDefault(x => x.Id == workflowId);
 
-    public ParsedWorkflow ParseWorkflow(string workflowJson, string workflowName, string baseModel) =>
-        _ParseWorkflow(workflowJson, workflowName, baseModel, rethrow: true)!;
+    public ParsedWorkflow ParseWorkflow(string workflowJson, string workflowName, string baseModel, string version) =>
+        _ParseWorkflow(workflowJson, workflowName, baseModel, version, rethrow: true)!;
     
-    public ParsedWorkflow? TryParseWorkflow(string workflowJson, string workflowName, string baseModel) =>
-        _ParseWorkflow(workflowJson, workflowName, baseModel, rethrow: false);
+    public ParsedWorkflow? TryParseWorkflow(string workflowJson, string workflowName, string baseModel, string version) =>
+        _ParseWorkflow(workflowJson, workflowName, baseModel, version, rethrow: false);
 
-    public ParsedWorkflow? _ParseWorkflow(string workflowJson, string workflowName, string baseModel, bool rethrow)
+    public ParsedWorkflow? _ParseWorkflow(string workflowJson, string workflowName, string baseModel, string version, bool rethrow)
     {
         var ret = new ParsedWorkflow
         {
-            BaseModel = baseModel
+            BaseModel = baseModel,
+            Version = version,
         };
         try
         {
@@ -314,7 +325,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     {
         var workflows = db.Select<Workflow>();
         var workflowVersions = db.Select<WorkflowVersion>();
-        var workflowPaths = workflows.ToDictionary(x => x.Path);
+        var workflowPaths = workflowVersions.ToDictionary(x => x.Path);
         
         var files = Directory.GetFiles(WorkflowsPath, "*.json", SearchOption.AllDirectories);
         var allWorkflows = files.Map(x => x[WorkflowsPath.Length..].TrimStart('/'));
@@ -327,25 +338,35 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
             var parts = workflowPath.Split('/');
             if (parts.Length != 3)
             {
-                log.LogWarning("Invalid Workflow Path: {WorkflowPath}, should be <category>/<group>/<filename>.json", workflowPath);
+                log.LogWarning("Invalid Workflow Path: {WorkflowPath}, should be <category>/<group>/<name>.<version>.json", workflowPath);
                 continue;
             }
+
+            var fileName = workflowPath.LastRightPart('/');
+            var nameAndVersion = fileName.WithoutExtension();
+            if (nameAndVersion.IndexOf('.') == -1)
+            {
+                log.LogWarning("Invalid Workflow Filename: {FileName}, should be <name>.<version>.json", fileName);
+                continue;
+            }
+
+            var name = nameAndVersion.LastLeftPart('.');
+            var version = nameAndVersion.LastRightPart('.');
             
             var userId = AppConfig.Instance.DefaultUserId;
             var workflowJson = ReadTextFile(WorkflowsPath.CombineWith(workflowPath))
-                               ?? throw new Exception($"Workflow not found: {workflowPath}");
+                ?? throw new Exception($"Workflow not found: {workflowPath}");
 
-            var name = parts[2].WithoutExtension();
             var baseModel = parts[1];
-            var workflowName = StringFormatters.FormatName(workflowPath.LastRightPart('/').WithoutExtension());
-            var parsedWorkflow = TryParseWorkflow(workflowJson, workflowName, baseModel);
+            var workflowName = StringFormatters.FormatName(name);
+            var parsedWorkflow = TryParseWorkflow(workflowJson, workflowName, baseModel, version);
             if (parsedWorkflow == null)
                 continue;
             
             var (workflow, workflowVersion) = CreateWorkflowAndVersion(db, parsedWorkflow, userId);
 
             workflowVersions.Add(workflowVersion);
-            workflowPaths[workflow.Path] = workflow;
+            workflowPaths[workflowVersion.Path] = workflowVersion;
             workflows.Add(workflow);
         }
         Workflows = workflows;
@@ -355,7 +376,6 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     {
         var workflow = new Workflow
         {
-            Path = parsedWorkflow.Path,
             Name = parsedWorkflow.Name,
             Category = parsedWorkflow.Category,
             Base = parsedWorkflow.BaseModel,
@@ -370,8 +390,9 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         var workflowVersion = new WorkflowVersion
         {
             ParentId = workflow.Id,
-            Version = "v1",
             Name = parsedWorkflow.Name,
+            Version = parsedWorkflow.Version,
+            Path = parsedWorkflow.Path,
             Workflow = parsedWorkflow.Workflow,
             Info = parsedWorkflow.Info,
             Nodes = parsedWorkflow.Nodes,
@@ -889,6 +910,16 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         return true;
     }
     
+    public ComfyAgent? GetSupportedAgent(HashSet<string> requiredNodes, HashSet<string> requiredAssets)
+    {
+        foreach (var agent in ComfyAgents.Values)
+        {
+            if (AgentCanRunWorkflow(agent, requiredNodes, requiredAssets))
+                return agent;
+        }
+        return null;
+    }
+
     public Dictionary<string, NodeInfo> GetSupportedNodeDefinitions(HashSet<string> requiredNodes, HashSet<string> requiredAssets)
     {
         foreach (var agent in ComfyAgents.Values)

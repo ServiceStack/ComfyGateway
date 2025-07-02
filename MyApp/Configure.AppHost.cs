@@ -5,7 +5,6 @@ using MyApp.ServiceModel;
 using ServiceStack.Configuration;
 using ServiceStack.Data;
 using ServiceStack.IO;
-using ServiceStack.NativeTypes.CSharp;
 using ServiceStack.OrmLite;
 using ServiceStack.Text;
 using ServiceStack.Web;
@@ -36,6 +35,11 @@ public partial class AppHost() : AppHostBase("MyApp"), IHostingStartup
             if (assetsBaseUrl != null)
                 appConfig.AssetsBaseUrl = assetsBaseUrl;
 
+            appConfig.BunExePath ??= Environment.GetEnvironmentVariable("BUN_EXE_PATH")
+                ?? ProcessUtils.FindExePath("bun");
+            if (string.IsNullOrEmpty(appConfig.BunExePath))
+                appConfig.BunExePath = null;
+
             services.AddSingleton<AppData>();
             services.AddSingleton(ComfyMetadata.Instance);
             services.AddSingleton<ComfyGateway>();
@@ -65,6 +69,9 @@ public partial class AppHost() : AppHostBase("MyApp"), IHostingStartup
             var scripts = InitOptions.ScriptContext; 
             scripts.ScriptAssemblies.Add(typeof(Hello).Assembly);
             scripts.ScriptMethods.Add(new ValidationScripts());
+
+            // services.AddSingleton<IComfyWorkflowConverter, CSharpComfyWorkflowConverter>();
+            services.AddSingleton<IComfyWorkflowConverter, NodeComfyWorkflowConverter>();
         })
         .ConfigureAppHost(afterConfigure: appHost =>
         {

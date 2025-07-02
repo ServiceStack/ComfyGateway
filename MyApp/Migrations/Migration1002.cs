@@ -16,8 +16,6 @@ public class Migration1002 : MigrationBase
         public string Name { get; set; }
         [Index(Unique = true)]
         public string Slug { get; set; }
-        [Unique]
-        public string Path { get; set; }
         public string Description { get; set; } // Markdown
         public int? PinVersionId { get; set; }
         public int? ThreadId { get; set; }
@@ -30,11 +28,16 @@ public class Migration1002 : MigrationBase
         [AutoIncrement]
         public int Id { get; set; }
         [ForeignKey(typeof(Workflow))]
-        public int ParentId { get; set; } //ComfyWorkflow.Id
-        public string Version { get; set; }  //v1
+        public int ParentId { get; set; }   // ComfyWorkflow.Id
         public string Name { get; set; }    // Version Name
+        public string Version { get; set; } // v1
+        [Unique]
+        public string Path { get; set; }    // Category/Base/Name.Version.json
         public Dictionary<string,object?> Workflow { get; set; }
         public ComfyWorkflowInfo Info { get; set; }
+        [IgnoreDataMember]
+        [PgSqlJsonB]
+        public Dictionary<string, ApiNode>? ApiPrompt { get; set; }
         public List<string> Nodes { get; set; }
         public List<string> Assets { get; set; }
     
@@ -155,6 +158,7 @@ public class Migration1002 : MigrationBase
     public class ComfyResult {}
     public class Ratings {}
     public class ObjectDetection {}
+    public class ApiNode {}
 
     public override void Up()
     {

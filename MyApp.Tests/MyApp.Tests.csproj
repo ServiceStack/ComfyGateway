@@ -35,4 +35,11 @@
         </None>
     </ItemGroup>
 
+    <ItemGroup>
+      <Content Update="workflows\text-to-image\smooth_workflow_v3.json">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </Content>
+    </ItemGroup>
+
 </Project>

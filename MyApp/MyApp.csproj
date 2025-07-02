@@ -65,10 +65,12 @@
     <ItemGroup>
       <Folder Include="App_Data\artifacts\" />
       <Folder Include="App_Data\files\" />
+      <Folder Include="src\utils\" />
     </ItemGroup>
 
     <ItemGroup>
       <_ContentIncludedByDefault Remove="wwwroot\data\workflows\Text to Image\SD 1.5\Basic.json" />
+      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\Text to Image\NoobAI\Smooth Workflow v3.v1.json" />
     </ItemGroup>
 
     <Target Name="tailwind" BeforeTargets="Publish">

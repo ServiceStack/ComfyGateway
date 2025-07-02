@@ -19,7 +19,8 @@ public class ComfyServices(ILogger<ComfyServices> log,
     ComfyGateway comfyGateway,
     IBackgroundJobs jobs, 
     IDbConnectionFactory dbFactory,
-    AgentEventsManager agentManager)
+    AgentEventsManager agentManager,
+    IComfyWorkflowConverter comfyConverter)
     : Service
 {
     public const string ComfyBaseUrl = "http://localhost:7860/api";
@@ -313,7 +314,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
     //     return apiPrompt;
     // }
 
-    public object Post(RequeueGeneration request)
+    public async Task<object> Post(RequeueGeneration request)
     {
         var userId = Request.GetClaimsPrincipal().GetUserId();
         log.LogInformation("Received RequeueGeneration from '{UserId}' to execute Generation '{Id}'",
@@ -339,21 +340,13 @@ public class ComfyServices(ILogger<ComfyServices> log,
             }
             
             var workflowVersion = GetWorkflowVersion(Db, gen.WorkflowId, gen.VersionId);
-            var workflow = workflowVersion.Workflow;
-            var workflowInfo = workflowVersion.Info;
-            var result = ComfyWorkflowParser.MergeWorkflow(workflow, gen.Args!, workflowInfo);
-            gen.Workflow = result.Result;
-
-            var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflow, log);
-            var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflow, log);
-            var nodeDefs = appData.GetSupportedNodeDefinitions(requiredNodes, requiredAssets);
-            gen.ApiPrompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflow, nodeDefs, gen.Id, log:log);
+            var (apiPrompt, newWorkflow) = await comfyConverter.CreateApiPromptAsync(workflowVersion, gen.Args, gen.Id);
 
             Db.UpdateOnly(() => new WorkflowGeneration
             {
                 Args = gen.Args,
-                Workflow = gen.Workflow,
-                ApiPrompt = gen.ApiPrompt,
+                Workflow = newWorkflow,
+                ApiPrompt = apiPrompt,
                 DeviceId = null,
                 PromptId = null,
                 Error = null,
@@ -403,32 +396,23 @@ public class ComfyServices(ILogger<ComfyServices> log,
         return workflowVersion;
     }
 
-    public object Post(QueueWorkflow request)
+    public async Task<object> Post(QueueWorkflow request)
     {
         using var db = Db;
         var userId = Request.GetClaimsPrincipal().GetUserId();
         log.LogInformation("Received QueueComfyWorkflow from '{UserId}' to execute workflow '{Workflow}'",
             userId, request.WorkflowId);
                 
-        var workflowVersion = GetWorkflowVersion(db, request.WorkflowId, request.VersionId);
-        var workflow = workflowVersion.Workflow;
-        var workflowInfo = workflowVersion.Info;
-        if (request.Args?.Count > 0)
-        {
-            var result = ComfyWorkflowParser.MergeWorkflow(workflow, request.Args!, workflowInfo);
-            workflow = result.Result;
-        }
-
-        var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflow, log);
-        var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflow, log);
-        var nodeDefs = appData.GetSupportedNodeDefinitions(requiredNodes,requiredAssets);
-        
         var clientId = Guid.NewGuid().ToString("N");
-        var apiPrompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflow, nodeDefs, clientId, log:log);
+        var workflowVersion = GetWorkflowVersion(db, request.WorkflowId, request.VersionId);
+        var (apiPrompt, workflow) = await comfyConverter.CreateApiPromptAsync(workflowVersion, request.Args!, clientId);
 
         log.LogInformation("Queueing ComfyUI Workflow for {ClientId}: {ApiPromptJson}", 
             apiPrompt.ClientId, ClientConfig.ToSystemJson(apiPrompt.Prompt));
 
+        var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflowVersion.Workflow, log);
+        var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflowVersion.Workflow, log);
+        
         var checkpoint = requiredAssets.FirstOrDefault(x => 
             x.StartsWith("checkpoints/") || x.StartsWith("diffusion_models/") || x.StartsWith("unet/") || 
             x.StartsWith("Stable-diffusion/", StringComparison.OrdinalIgnoreCase));
@@ -870,10 +854,10 @@ public class ComfyServices(ILogger<ComfyServices> log,
         var workflowJson = await Request.Files[0].InputStream.ReadToEndAsync();
         var workflow = db.SingleById<Workflow>(workflowVersion.ParentId);
 
-        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, workflowVersion.Name, workflow.Base)
+        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, workflowVersion.Name, workflow.Base, workflowVersion.Version)
             ?? throw HttpError.BadRequest("Failed to parse workflow");
         
-        var saveToPath = appData.WorkflowsPath.CombineWith(workflow.Path);
+        var saveToPath = appData.WorkflowsPath.CombineWith(workflowVersion.Path);
         Path.GetDirectoryName(saveToPath).AssertDir();
         await File.WriteAllTextAsync(saveToPath, workflowJson);
         
@@ -914,7 +898,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
         foreach (var version in allVersions)
         {
             var workflow = allWorkflows.Find(x => x.Id == version.ParentId);
-            if (workflow?.Path == null)
+            if (workflow == null)
             {
                 ret.Results.Add($"Workflow not found for version {version.Id}");
                 continue;
@@ -922,17 +906,20 @@ public class ComfyServices(ILogger<ComfyServices> log,
 
             try
             {
-                var workflowJson = await File.ReadAllTextAsync(appData.WorkflowsPath.CombineWith(workflow.Path));
+                var workflowJson = await File.ReadAllTextAsync(appData.WorkflowsPath.CombineWith(version.Path));
 
-                var parsedWorkflow = appData.ParseWorkflow(workflowJson, version.Name, workflow.Base);
+                var parsedWorkflow = appData.ParseWorkflow(workflowJson, version.Name, workflow.Base, version.Version);
 
-                // if (parsedWorkflow.Nodes.SequenceEqual(version.Nodes) && 
-                //     parsedWorkflow.Assets.SequenceEqual(version.Assets))
-                //     continue;
+                var clientId = version.Workflow.TryGetValue("Id", out var oId) && oId is string id
+                    ? id
+                    : Guid.NewGuid().ToString("N");
+                var (apiPrompt, _) = await comfyConverter.CreateApiPromptAsync(version, new(), clientId);
+                version.ApiPrompt = apiPrompt.Prompt;
                 
                 await db.UpdateOnlyAsync(() => new WorkflowVersion {
                     Workflow = parsedWorkflow.Workflow,
                     Info = parsedWorkflow.Info,
+                    ApiPrompt = version.ApiPrompt,
                     Nodes = parsedWorkflow.Nodes,
                     Assets = parsedWorkflow.Assets,
                     ModifiedBy = userId,
@@ -943,7 +930,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
             }
             catch (Exception e)
             {
-                ret.Results.Add($"Failed to parse {workflow.Path}");
+                ret.Results.Add($"Failed to parse {version.Path}");
             }
         }
 
@@ -967,7 +954,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
 
         workflowName = StringFormatters.FormatName(workflowName);
         var workflow = workflowJson.ParseAsObjectDictionary();
-        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, workflowName, "SDXL")
+        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, workflowName, "SDXL", "v1")
             ?? throw HttpError.BadRequest("Failed to parse workflow");
         return parsedWorkflow;
     }
@@ -982,19 +969,25 @@ public class ComfyServices(ILogger<ComfyServices> log,
             throw HttpError.BadRequest("No file uploaded");
 
         var name = request.WorkflowName ?? Request.Files[0].FileName.LastRightPart('/').LastLeftPart('.');
-        var fileName = name + ".json";
         // Check for invalid filename chars
-        if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-            fileName.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            name.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
             throw HttpError.BadRequest("Invalid Name");
 
+        var version = "v1";
+        if (name.IndexOf('.') >= 0)
+        {
+            version = name.LastRightPart('.');
+            name = name.LastLeftPart('.');
+        }
+        
         if (db.Exists<Workflow>(x => x.Name == name))
             throw new ArgumentNullException(nameof(request.WorkflowName), $"Workflow '{name}' already exists");
 
         var workflowJson = await Request.Files[0].InputStream.ReadToEndAsync();
 
         var baseModel = request.BaseModel.ToJsv(); // Use EnumMember Value if exists
-        var parsedWorkflow = appData.ParseWorkflow(workflowJson, name, baseModel);
+        var parsedWorkflow = appData.ParseWorkflow(workflowJson, name, baseModel, version);
         var saveToFullPath = appData.WorkflowsPath.CombineWith(parsedWorkflow.Path);
         Path.GetDirectoryName(saveToFullPath).AssertDir();
         await File.WriteAllTextAsync(saveToFullPath, workflowJson);

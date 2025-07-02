@@ -947,7 +947,7 @@ public class ComfyWorkflowParser
         return "";
     }
 
-    public static MergeWorkflowResult MergeWorkflow(Dictionary<string, object?> workflow, Dictionary<string, object> args, WorkflowInfo workflowInfo, ILogger? log=null)
+    public static MergeWorkflowResult MergeWorkflow(Dictionary<string, object?> workflow, Dictionary<string, object?> args, WorkflowInfo workflowInfo, ILogger? log=null)
     {
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentNullException.ThrowIfNull(args);
