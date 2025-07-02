@@ -11,6 +11,7 @@ public static class Tags
     public const string Artifacts = nameof(Artifacts);
     public const string AiInfo = nameof(AiInfo);
     public const string Admin = nameof(Admin);
+    public const string Devices = nameof(Devices);
 }
 
 [Tag(Tags.Comfy)]

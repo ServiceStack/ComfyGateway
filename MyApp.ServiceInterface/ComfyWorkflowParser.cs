@@ -51,7 +51,9 @@ public class ComfyWorkflowParser
                 or "ImageOnlyCheckpointLoader" 
                 or "CreateHookModelAsLora" 
                 or "CreateHookModelAsLoraModelOnly" 
-                or "CheckpointLoader|pysssss")
+                or "CheckpointLoader|pysssss"
+                or "Checkpoint Loader with Name (Image Saver)" // comfyui-image-saver 
+                )
             {
                 var widgetValueIndex = nodeType == "CheckpointLoader" ? 1 : 0;
                 if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
@@ -156,7 +158,7 @@ public class ComfyWorkflowParser
                     ret.Add("gligen/" + widgetValues[0]);
                 }
             }
-            else if (nodeType is "AssetDownloader")
+            else if (nodeType is "AssetDownloader" or "RequiresAsset")
             {
                 if (node["widgets_values"] is List<object> { Count: >= 3 } widgetValues)
                 {
@@ -221,7 +223,11 @@ public class ComfyWorkflowParser
                 if (node.GetValueOrDefault("type") is not string nodeType) continue;
 
                 // If has CLIPTextEncode then inputSource is Text
-                if (nodeType is "CLIPTextEncode" or "CLIPTextEncodeSDXL")
+                if (nodeType is 
+                    "CLIPTextEncode" 
+                    or "CLIPTextEncodeSDXL"
+                    or "ImpactWildcardEncode" // comfyui-impact-pack
+                )
                 {
                     inputSource = ComfyPrimarySource.Text;
                     break;
@@ -880,6 +886,25 @@ public class ComfyWorkflowParser
                         Type = ComfyInputType.Boolean,
                         Default = widgetValues[2],
                     });
+                }
+            }
+            else if (nodeType is "AssetDownloader" or "RequiresAsset")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 3 } widgetValues)
+                {
+                    var url = widgetValues[0].ToString();
+                    var token = widgetValues[3].ToString();
+                    if (!string.IsNullOrEmpty(token))
+                        url = $"{token}@{url}";
+                    var asset = widgetValues[1].ToString().CombineWith(widgetValues[2]);
+                    if (!string.IsNullOrEmpty(asset) && !string.IsNullOrEmpty(url))
+                    {
+                        workflowInfo.Assets.Add(new AssetInfo
+                        {
+                            Asset = asset,
+                            Url = url,
+                        });
+                    }
                 }
             }
         }

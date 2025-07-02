@@ -1,4 +1,5 @@
-import { inject, onMounted } from "vue"
+import { inject, onMounted, ref } from "vue"
+import DeviceDetailsDialog from "./DeviceDetailsDialog.mjs"
 
 const CloseButton = {
     template:`
@@ -21,12 +22,14 @@ const CloseButton = {
 export default {
     components: {
         CloseButton,
+        DeviceDetailsDialog,
     },
     template:`
     <div :key="device.id"
-         class="relative bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-200">
+         class="relative cursor-zoom-in bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+         @click="showDetails = true">
 
-        <CloseButton v-if="(device.userId == store.userId || store.isAdmin) && getDeviceStatus(device) !== 'Online'" class="-mt-3 -mr-3" buttonClass="dark:bg-gray-800" title="Remove offline device" @close="removeDevice" />
+        <CloseButton v-if="(device.userId == store.userId || store.isAdmin) && getDeviceStatus(device) !== 'Online'" class="-mt-3 -mr-3" buttonClass="dark:bg-gray-800" title="Remove offline device" @close.stop="removeDevice" />
 
         <!-- Device Header -->
         <div class="px-4 py-5 sm:p-6">
@@ -105,74 +108,77 @@ export default {
                 <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Available Models</h4>
                 <div class="flex flex-wrap gap-2">
                     <div v-if="device.checkpoints?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-help"
                          :title="getModelTooltip(device.checkpoints, 'Checkpoints')">
                         Checkpoints: {{ device.checkpoints.length }}
                     </div>
                     <div v-if="device.loras?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 cursor-help"
                          :title="getModelTooltip(device.loras, 'LoRAs')">
                         LoRAs: {{ device.loras.length }}
                     </div>
                     <div v-if="device.vaes?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 cursor-help"
                          :title="getModelTooltip(device.vaes, 'VAEs')">
                         VAEs: {{ device.vaes.length }}
                     </div>
                     <div v-if="device.controlNets?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 cursor-help"
                          :title="getModelTooltip(device.controlNets, 'ControlNets')">
                         ControlNets: {{ device.controlNets.length }}
                     </div>
                     <div v-if="device.upscalers?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 cursor-help"
                          :title="getModelTooltip(device.upscalers, 'Upscalers')">
                         Upscalers: {{ device.upscalers.length }}
                     </div>
                     <div v-if="device.embeddings?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 cursor-help"
                          :title="getModelTooltip(device.embeddings, 'Embeddings')">
                         Embeddings: {{ device.embeddings.length }}
                     </div>
                     <div v-if="device.clips?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 cursor-help"
                          :title="getModelTooltip(device.clips, 'CLIP Models')">
                         CLIPs: {{ device.clips.length }}
                     </div>
                     <div v-if="device.clipVisions?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-cyan-100 dark:bg-cyan-900 text-cyan-800 dark:text-cyan-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-cyan-100 dark:bg-cyan-900 text-cyan-800 dark:text-cyan-200 cursor-help"
                          :title="getModelTooltip(device.clipVisions, 'CLIP Vision Models')">
                         CLIP Visions: {{ device.clipVisions.length }}
                     </div>
                     <div v-if="device.unets?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 cursor-help"
                          :title="getModelTooltip(device.unets, 'UNet Models')">
                         UNets: {{ device.unets.length }}
                     </div>
                     <div v-if="device.stylers?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200 cursor-help"
                          :title="getModelTooltip(device.stylers, 'Style Models')">
                         Stylers: {{ device.stylers.length }}
                     </div>
                     <div v-if="device.gligens?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-lime-100 dark:bg-lime-900 text-lime-800 dark:text-lime-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-lime-100 dark:bg-lime-900 text-lime-800 dark:text-lime-200 cursor-help"
                          :title="getModelTooltip(device.gligens, 'GLIGEN Models')">
                         GLIGENs: {{ device.gligens.length }}
                     </div>
                     <div v-if="device.photoMakers?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200 cursor-help"
                          :title="getModelTooltip(device.photoMakers, 'PhotoMaker Models')">
                         PhotoMakers: {{ device.photoMakers.length }}
                     </div>
                     <div v-if="device.languageModels?.length"
-                         class="relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-fuchsia-100 dark:bg-fuchsia-900 text-fuchsia-800 dark:text-fuchsia-200 cursor-help"
+                         class="cursor-info relative inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-fuchsia-100 dark:bg-fuchsia-900 text-fuchsia-800 dark:text-fuchsia-200 cursor-help"
                          :title="getModelTooltip(device.languageModels, 'Language Models')">
                         Language Models: {{ device.languageModels.length }}
                     </div>
                 </div>
             </div>
         </div>
-    </div>    
+
+        <!-- Device Details Dialog -->
+        <DeviceDetailsDialog v-if="showDetails" :device="device" @done="showDetails = false" />
+    </div>
     `,
     emits:['deleted'],
     props: {
@@ -180,6 +186,7 @@ export default {
     },
     setup(props, { emit }) {
         const store = inject('store')
+        const showDetails = ref(false)
 
         onMounted(() => {
             //console.log('DeviceInfo',props.device)
@@ -265,6 +272,7 @@ export default {
 
         return {
             store,
+            showDetails,
             getDeviceStatus,
             getStatusBadgeClass,
             formatMemory,

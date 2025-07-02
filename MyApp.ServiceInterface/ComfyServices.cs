@@ -36,6 +36,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
             AgentEventCounts = agentManager.GetAgentEventsCount(),
             Agents = visibleAgents.Map(x => x.ConvertTo<AgentInfo>()),
             QueuedAiTasks = agentManager.AiTasks.Values.Map(x => x.ConvertTo<AiTaskInfo>()),
+            DefaultGatewayNodes = appData.DefaultGatewayNodes,
         };
 
         return ret;
@@ -86,7 +87,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
             } while (userAgents.Count == 0 || userAgents.Max(x => x.ModifiedDate) < startedAt || DateTime.UtcNow - startedAt < waitFor);
         }
 
-        var activeAgents = appData.GetVisibleComfyAgents();
+        var activeAgents = appData.GetVisibleComfyAgents().ToList();
         var userDevices = await Db.SelectAsync<ComfyAgent>(x => x.UserId == userId);
         userDevices.Each(agent =>
         {
@@ -867,9 +868,14 @@ public class ComfyServices(ILogger<ComfyServices> log,
             throw HttpError.BadRequest("No file uploaded");
 
         var workflowJson = await Request.Files[0].InputStream.ReadToEndAsync();
+        var workflow = db.SingleById<Workflow>(workflowVersion.ParentId);
 
-        var parsedWorkflow = appData.ParseWorkflow(workflowJson, workflowVersion.Name ?? "Unknown")
+        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, workflowVersion.Name, workflow.Base)
             ?? throw HttpError.BadRequest("Failed to parse workflow");
+        
+        var saveToPath = appData.WorkflowsPath.CombineWith(workflow.Path);
+        Path.GetDirectoryName(saveToPath).AssertDir();
+        await File.WriteAllTextAsync(saveToPath, workflowJson);
         
         var updated = await db.UpdateOnlyAsync(() => new WorkflowVersion {
             Workflow = parsedWorkflow.Workflow,
@@ -890,6 +896,60 @@ public class ComfyServices(ILogger<ComfyServices> log,
         };
     }
 
+    public async Task<object> Post(ParseWorkflowVersions request)
+    {
+        using var db = Db;
+        var now = DateTime.UtcNow;
+        var userId = Request.GetRequiredUserId();
+        var ret = new StringsResponse();
+
+        var allVersions = Db.Select<WorkflowVersion>();
+        var allWorkflows = Db.Select<Workflow>();
+        
+        if (request.VersionId != null)
+        {
+            allVersions = allVersions.Where(x => x.Id == request.VersionId).ToList();
+        }
+        
+        foreach (var version in allVersions)
+        {
+            var workflow = allWorkflows.Find(x => x.Id == version.ParentId);
+            if (workflow?.Path == null)
+            {
+                ret.Results.Add($"Workflow not found for version {version.Id}");
+                continue;
+            }
+
+            try
+            {
+                var workflowJson = await File.ReadAllTextAsync(appData.WorkflowsPath.CombineWith(workflow.Path));
+
+                var parsedWorkflow = appData.ParseWorkflow(workflowJson, version.Name, workflow.Base);
+
+                // if (parsedWorkflow.Nodes.SequenceEqual(version.Nodes) && 
+                //     parsedWorkflow.Assets.SequenceEqual(version.Assets))
+                //     continue;
+                
+                await db.UpdateOnlyAsync(() => new WorkflowVersion {
+                    Workflow = parsedWorkflow.Workflow,
+                    Info = parsedWorkflow.Info,
+                    Nodes = parsedWorkflow.Nodes,
+                    Assets = parsedWorkflow.Assets,
+                    ModifiedBy = userId,
+                    ModifiedDate = now,
+                }, where:x => x.Id == version.Id);
+                
+                ret.Results.Add($"Workflow {version.Id} updated with {parsedWorkflow.Nodes.Count} nodes and {parsedWorkflow.Assets.Count} assets");
+            }
+            catch (Exception e)
+            {
+                ret.Results.Add($"Failed to parse {workflow.Path}");
+            }
+        }
+
+        return ret;
+    }
+
     public async Task<object> Post(ParseWorkflow request)
     {
         var uploadedFile = Request!.Files.Length > 0
@@ -907,9 +967,48 @@ public class ComfyServices(ILogger<ComfyServices> log,
 
         workflowName = StringFormatters.FormatName(workflowName);
         var workflow = workflowJson.ParseAsObjectDictionary();
-        var parsedWorkflow = appData.ParseWorkflow(workflowJson, workflowName)
+        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, workflowName, "SDXL")
             ?? throw HttpError.BadRequest("Failed to parse workflow");
         return parsedWorkflow;
+    }
+
+    public async Task<object> Post(UploadNewWorkflow request)
+    {
+        using var db = Db;
+        var now = DateTime.UtcNow;
+        var userId = Request.GetRequiredUserId();
+        
+        if (Request.Files.Length == 0)
+            throw HttpError.BadRequest("No file uploaded");
+
+        var name = request.WorkflowName ?? Request.Files[0].FileName.LastRightPart('/').LastLeftPart('.');
+        var fileName = name + ".json";
+        // Check for invalid filename chars
+        if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            fileName.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            throw HttpError.BadRequest("Invalid Name");
+
+        if (db.Exists<Workflow>(x => x.Name == name))
+            throw new ArgumentNullException(nameof(request.WorkflowName), $"Workflow '{name}' already exists");
+
+        var workflowJson = await Request.Files[0].InputStream.ReadToEndAsync();
+
+        var baseModel = request.BaseModel.ToJsv(); // Use EnumMember Value if exists
+        var parsedWorkflow = appData.ParseWorkflow(workflowJson, name, baseModel);
+        var saveToFullPath = appData.WorkflowsPath.CombineWith(parsedWorkflow.Path);
+        Path.GetDirectoryName(saveToFullPath).AssertDir();
+        await File.WriteAllTextAsync(saveToFullPath, workflowJson);
+
+        var (workflow, workflowVersion) = AppData.CreateWorkflowAndVersion(Db, parsedWorkflow, userId);
+
+        return new UploadNewWorkflowResponse
+        {
+            VersionId = workflowVersion.Id,
+            Nodes = parsedWorkflow.Nodes,
+            Assets = parsedWorkflow.Assets,
+            Info = parsedWorkflow.Info,
+        };
+        
     }
 }
 

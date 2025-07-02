@@ -55,6 +55,7 @@ public class ConfigureDbMigrations : IHostingStartup
                 var Db = migrator.DbFactory.OpenDbConnection();
                 var log = NullLogger.Instance;
                 Db.DropAndCreateTable<DeletedRow>();
+                Db.DropAndCreateTable<ComfyAgent>();
             });
             AppTasks.Register("metadata", args =>
             {

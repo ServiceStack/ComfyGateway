@@ -21,6 +21,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     public AppConfig Config { get; } = appConfig;
     public string ContentRootPath => env.ContentRootPath;
     public string WebRootPath => env.ContentRootPath.CombineWith("wwwroot");
+    public string WorkflowsPath => WebRootPath.CombineWith("data", "workflows");
     public ComfyMetadata Metadata { get; } = metadata;
     public HashSet<string> DefaultGatewayNodes { get; set; } = new();
 
@@ -40,6 +41,8 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     public List<string>? RequireNodes { get; set; }
     public List<string>? RequireModels { get; set; }
     public List<string>? RequirePip { get; set; }
+
+    public Dictionary<string,string> NodesUrlMap { get; set; } = new();
 
     public ConcurrentDictionary<string, DateTime> BannedUsersMap { get; set; } = new();
     public int MaxDeletedRowId { get; set; }
@@ -105,7 +108,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         if (agent.OfflineDate != null)
         {
             agent.OfflineDate = null;
-            agent.LastUpdate = DateTime.UtcNow;
+            agent.SetLastUpdate();
             return RegisterEvent;
         }
         return null;
@@ -139,6 +142,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         LoadPromptRatings();
         LoadTagRatings();
         LoadObjectRatings();
+        LoadNodesUrlMap();
         LoadComfyAgentInstallDefaults();
     }
 
@@ -249,23 +253,49 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         ? null 
         : Workflows.FirstOrDefault(x => x.Id == workflowId);
 
-    public ParsedWorkflow? ParseWorkflow(string workflowJson, string workflowName)
+    public ParsedWorkflow ParseWorkflow(string workflowJson, string workflowName, string baseModel) =>
+        _ParseWorkflow(workflowJson, workflowName, baseModel, rethrow: true)!;
+    
+    public ParsedWorkflow? TryParseWorkflow(string workflowJson, string workflowName, string baseModel) =>
+        _ParseWorkflow(workflowJson, workflowName, baseModel, rethrow: false);
+
+    public ParsedWorkflow? _ParseWorkflow(string workflowJson, string workflowName, string baseModel, bool rethrow)
     {
-        var ret = new ParsedWorkflow {
-            Workflow = workflowJson.ParseAsObjectDictionary()
+        var ret = new ParsedWorkflow
+        {
+            BaseModel = baseModel
         };
         try
         {
-            if (ret.Workflow["nodes"] is not List<object> nodesObj)
+            ret.Workflow = workflowJson.ParseAsObjectDictionary(); 
+        }
+        catch (Exception e)
+        {
+            if (rethrow)
+                throw new Exception("Failed to parse workflow JSON");
+            log.LogError(e, "Failed to parse workflow JSON: {WorkflowPath}", workflowName);
+            return null;
+        }
+        
+        if (ret.Workflow["nodes"] is not List<object> nodesObj)
+        {
+            if (rethrow)
                 throw new Exception("No nodes found in workflow JSON");
+            log.LogError("No nodes found in workflow JSON");
+            return null;
+        }
 
-            ret.Nodes = nodesObj.Map(x => ((Dictionary<string, object>)x)["type"].ToString()!).Distinct().OrderBy(x => x).ToList();
+        try
+        {
+            var nodes = nodesObj.Map(x => ((Dictionary<string, object>)x)["type"].ToString()!).Distinct().OrderBy(x => x).ToList();
+            var nonDefaultNodes = nodes.Where(x => !DefaultGatewayNodes.Contains(x)).ToList();
+            ret.Nodes = nonDefaultNodes;
             ret.Assets = ComfyWorkflowParser.ExtractAssetPaths(ret.Workflow, log).Distinct().OrderBy(x => x).ToList();
         }
         catch (Exception e)
         {
             log.LogError(e, "Failed to parse workflow JSON: {WorkflowPath}", workflowName);
-            return null;
+            if (rethrow) throw;
         }
 
         try
@@ -275,7 +305,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         catch (Exception e)
         {
             log.LogError(e, "Failed to parse workflow info: {WorkflowPath}", workflowName);
-            return null;
+            if (rethrow) throw;
         }
         return ret;
     }
@@ -286,9 +316,8 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         var workflowVersions = db.Select<WorkflowVersion>();
         var workflowPaths = workflows.ToDictionary(x => x.Path);
         
-        var workflowsPath = WebRootPath.CombineWith("data", "workflows");
-        var files = Directory.GetFiles(workflowsPath, "*.json", SearchOption.AllDirectories);
-        var allWorkflows = files.Map(x => x[workflowsPath.Length..].TrimStart('/'));
+        var files = Directory.GetFiles(WorkflowsPath, "*.json", SearchOption.AllDirectories);
+        var allWorkflows = files.Map(x => x[WorkflowsPath.Length..].TrimStart('/'));
         // allWorkflows.PrintDump();
         foreach (var workflowPath in allWorkflows)
         {
@@ -302,56 +331,63 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
                 continue;
             }
             
-            var workflowJson = ReadTextFile(workflowsPath.CombineWith(workflowPath))
-                ?? throw new Exception($"Workflow not found: {workflowPath}");
+            var userId = AppConfig.Instance.DefaultUserId;
+            var workflowJson = ReadTextFile(WorkflowsPath.CombineWith(workflowPath))
+                               ?? throw new Exception($"Workflow not found: {workflowPath}");
 
+            var name = parts[2].WithoutExtension();
+            var baseModel = parts[1];
             var workflowName = StringFormatters.FormatName(workflowPath.LastRightPart('/').WithoutExtension());
-            var parsedWorkflow = ParseWorkflow(workflowJson, workflowName);
+            var parsedWorkflow = TryParseWorkflow(workflowJson, workflowName, baseModel);
             if (parsedWorkflow == null)
                 continue;
             
-            var defaultUser = AppConfig.Instance.DefaultUserId;
+            var (workflow, workflowVersion) = CreateWorkflowAndVersion(db, parsedWorkflow, userId);
 
-            var name = parts[2].WithoutExtension();
-            var workflow = new Workflow
-            {
-                Path = workflowPath,
-                Category = parts[0],
-                Base = parts[1],
-                Name = name,
-                Slug = name.GenerateSlug(),
-                CreatedBy = defaultUser,
-                CreatedDate = DateTime.UtcNow,
-                ModifiedBy = defaultUser,
-                ModifiedDate = DateTime.UtcNow,
-            };
-
-            workflow.Id = (int) db.Insert(workflow, selectIdentity: true);
-            workflowPaths[workflowPath] = workflow;
-            workflows.Add(workflow);
-
-            var workflowVersion = new WorkflowVersion
-            {
-                ParentId = workflow.Id,
-                Version = "v1",
-                Name = name,
-                Workflow = parsedWorkflow.Workflow,
-                Info = parsedWorkflow.Info,
-                Nodes = parsedWorkflow.Nodes,
-                Assets = parsedWorkflow.Assets,
-                CreatedBy = defaultUser,
-                CreatedDate = DateTime.UtcNow,
-                ModifiedBy = defaultUser,
-                ModifiedDate = DateTime.UtcNow,
-            };
-            workflowVersion.Id = (int) db.Insert(workflowVersion, selectIdentity: true);
             workflowVersions.Add(workflowVersion);
-                
-            db.UpdateOnly(() => new Workflow {
-                PinVersionId = workflowVersion.Id,
-            }, x => x.Id == workflow.Id);
+            workflowPaths[workflow.Path] = workflow;
+            workflows.Add(workflow);
         }
         Workflows = workflows;
+    }
+
+    public static (Workflow,WorkflowVersion) CreateWorkflowAndVersion(IDbConnection db, ParsedWorkflow parsedWorkflow, string userId)
+    {
+        var workflow = new Workflow
+        {
+            Path = parsedWorkflow.Path,
+            Name = parsedWorkflow.Name,
+            Category = parsedWorkflow.Category,
+            Base = parsedWorkflow.BaseModel,
+            Slug = parsedWorkflow.Name.GenerateSlug(),
+            Tags = [parsedWorkflow.BaseModel],
+            CreatedBy = userId,
+            CreatedDate = DateTime.UtcNow,
+            ModifiedBy = userId,
+            ModifiedDate = DateTime.UtcNow,
+        };
+        workflow.Id = (int) db.Insert(workflow, selectIdentity: true);
+        var workflowVersion = new WorkflowVersion
+        {
+            ParentId = workflow.Id,
+            Version = "v1",
+            Name = parsedWorkflow.Name,
+            Workflow = parsedWorkflow.Workflow,
+            Info = parsedWorkflow.Info,
+            Nodes = parsedWorkflow.Nodes,
+            Assets = parsedWorkflow.Assets,
+            CreatedBy = userId,
+            CreatedDate = DateTime.UtcNow,
+            ModifiedBy = userId,
+            ModifiedDate = DateTime.UtcNow,
+        };
+        workflowVersion.Id = (int) db.Insert(workflowVersion, selectIdentity: true);
+                
+        db.UpdateOnly(() => new Workflow {
+            PinVersionId = workflowVersion.Id,
+        }, x => x.Id == workflow.Id);
+        
+        return (workflow, workflowVersion);
     }
 
     public void LoadTags(IDbConnection db)
@@ -454,6 +490,44 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
                    ?? ReadTextFile("wwwroot/data/object-ratings.json")
                    ?? throw new Exception("object-ratings.json not found");
         TagRatings = json.FromJson<Dictionary<Rating, HashSet<string>>>();
+    }
+
+    private void LoadNodesUrlMap()
+    {
+        /* Example JSON:
+            {
+                "https://git.mmaker.moe/mmaker/sd-webui-color-enhance": [
+                    [
+                        "MMakerColorBlend",
+                        "MMakerColorEnhance"
+                    ],
+                    {
+                        "title_aux": "mmaker/Color Enhance"
+                    }
+                ],
+                ...
+            }
+         */
+        var json = ReadTextFile(Path.Combine(OverridesPath, "extension-node-map.json"))
+           ?? ReadTextFile("wwwroot/data/extension-node-map.json")
+           ?? throw new Exception("extension-node-map.json not found");
+        var obj = (Dictionary<string,object?>) JSON.parse(json);
+        NodesUrlMap = new();
+
+        foreach (var entry in obj)
+        {
+            if (entry.Value is not List<object> value)
+                continue;
+            if (value[0] is not List<object> nodes)
+                continue;
+            var url = entry.Key;
+            foreach (var node in nodes)
+            {
+                if (node is not string nodeName)
+                    continue;
+                NodesUrlMap[nodeName] = url;
+            }
+        }
     }
 
     public void LoadComfyAgentInstallDefaults()
@@ -740,7 +814,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
                     break;
                 case "diffusion_models":
                 case "unet":
-                    if (!agent.Unets.Contains(fileName))
+                    if (!agent.DiffusionModels.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "loras":
@@ -753,37 +827,37 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
                     break;
                 case "vae":
                 case "VAE":
-                    if (!agent.Vaes.Contains(fileName))
+                    if (!agent.Vae.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "clip":
                 case "text_encoders":
-                    if (!agent.Clips.Contains(fileName))
+                    if (!agent.Clip.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "clip_vision":
-                    if (!agent.ClipVisions.Contains(fileName))
+                    if (!agent.ClipVision.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "upscale_models":
-                    if (!agent.Upscalers.Contains(fileName))
+                    if (!agent.UpscaleModels.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "controlnet":
                 case "t2i_adapter":
-                    if (!agent.ControlNets.Contains(fileName))
+                    if (!agent.Controlnet.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "style_models":
-                    if (!agent.Stylers.Contains(fileName))
+                    if (!agent.StyleModels.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "photomaker":
-                    if (!agent.PhotoMakers.Contains(fileName))
+                    if (!agent.Photomaker.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
                 case "gligen":
-                    if (!agent.Gligens.Contains(fileName))
+                    if (!agent.Gligen.Contains(fileName))
                         missingAssets.Add(asset);
                     break;
             }

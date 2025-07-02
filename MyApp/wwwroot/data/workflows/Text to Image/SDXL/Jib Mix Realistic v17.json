@@ -1,7 +1,7 @@
 {
   "id": "b4ebf8c9-cdb6-4a3b-8bfe-f26b0ab21c6e",
   "revision": 0,
-  "last_node_id": 10,
+  "last_node_id": 15,
   "last_link_id": 9,
   "nodes": [
     {
@@ -16,7 +16,7 @@
         262
       ],
       "flags": {},
-      "order": 5,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -77,7 +77,7 @@
         266
       ],
       "flags": {},
-      "order": 6,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -239,7 +239,7 @@
         180.6060791015625
       ],
       "flags": {},
-      "order": 3,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -282,7 +282,7 @@
         539.5999755859375
       ],
       "flags": {},
-      "order": 7,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -311,7 +311,7 @@
         164.31304931640625
       ],
       "flags": {},
-      "order": 4,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -340,6 +340,62 @@
       ],
       "color": "#232",
       "bgcolor": "#353"
+    },
+    {
+      "id": 13,
+      "type": "RequiresAsset",
+      "pos": [
+        460.9622497558594,
+        820.9015502929688
+      ],
+      "size": [
+        372.4866638183594,
+        130
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "aux_id": "ServiceStack/comfy-agent",
+        "ver": "8666c425f247cd45ddeb0790e648a890230b8aa3",
+        "Node name for S&R": "RequiresAsset"
+      },
+      "widgets_values": [
+        "https://civitai.com/api/download/models/1809082?type=Model&format=SafeTensor&size=pruned&fp=fp16",
+        "checkpoints",
+        "jibMixRealisticXL_v170SmokeSheen.safetensors",
+        "$CIVITAI_TOKEN"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "RequiresAsset",
+      "pos": [
+        462.0244445800781,
+        1003.0398559570312
+      ],
+      "size": [
+        372.4866638183594,
+        130
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "aux_id": "ServiceStack/comfy-agent",
+        "ver": "8666c425f247cd45ddeb0790e648a890230b8aa3",
+        "Node name for S&R": "RequiresAsset"
+      },
+      "widgets_values": [
+        "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors",
+        "vae",
+        "sdxl_vae.safetensors",
+        ""
+      ]
     }
   ],
   "links": [
@@ -416,10 +472,31 @@
       "CLIP"
     ]
   ],
-  "groups": [],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Download Dependencies",
+      "bounding": [
+        452.1871032714844,
+        732.4916381835938,
+        389.2196960449219,
+        409.529052734375
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
   "config": {},
   "extra": {
-    "frontendVersion": "1.18.10"
+    "ds": {
+      "scale": 1.131883317611325,
+      "offset": [
+        -293.0099641066502,
+        -443.8657263717423
+      ]
+    },
+    "frontendVersion": "1.23.4"
   },
   "version": 0.4
 }

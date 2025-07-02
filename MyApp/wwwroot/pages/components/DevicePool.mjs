@@ -1,6 +1,4 @@
-import { ref, inject, onMounted } from "vue"
-import { useClient } from "../../lib/mjs/servicestack-vue.mjs";
-import { DevicePool } from "../../mjs/dtos.mjs"
+import { inject, onMounted } from "vue"
 import DeviceInfo from "./DeviceInfo.mjs"
 
 export default {
@@ -16,25 +14,17 @@ export default {
             </p>
         </div>
         <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <DeviceInfo v-for="device in devices" :device="device" @deleted="devices = devices.filter(x => x.id != device.id)" />
+            <DeviceInfo v-for="device in store.poolDevices" :device="device" @deleted="store.poolDevices = store.poolDevices.filter(x => x.id != device.id)" />
         </div>
     </div>
     `,
     setup() {
-        const client = useClient()
         const store = inject('store')
-        /** @type {Ref<AgentInfo[]>} */
-        const devices = ref([])
 
-        onMounted(async () => {
-            const api = await client.api(new DevicePool())
-            if (api.succeeded) {
-                devices.value = api.response.results
-            }
-        })
+        onMounted(store.loadPoolDevices())
 
         return {
-            devices,
+            store,
         }
     }    
 }

@@ -63,6 +63,9 @@ public class UpdateComfyAgentStatus : IPost, IReturn<EmptyResponse>
 {
     [ValidateNotEmpty, ValidateExactLength(32)]
     public string DeviceId { get; set; }
+    public string? Downloading { get; set; }
+    public string? Downloaded { get; set; }
+    public string? DownloadFailed { get; set; }
     public string? Status { get; set; }
     public string? Logs { get; set; }
     public ResponseStatus? Error { get; set; }
@@ -92,6 +95,8 @@ public class RegisterComfyAgentResponse
     public List<string>? RequirePip { get; set; }
     public List<string>? RequireNodes { get; set; }
     public List<string>? RequireModels { get; set; }
+    public ComfyAgentSettings Settings { get; set; }
+
     public ResponseStatus? ResponseStatus { get; set; }
 }
 

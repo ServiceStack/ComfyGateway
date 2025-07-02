@@ -11,6 +11,60 @@ public class ComfyFileRef
     public double Modified { get; set; }
 }
 
+public enum BaseModel
+{
+    SDXL,
+    [EnumMember(Value = "SD 1.x")]
+    SD1,
+    [EnumMember(Value = "SD 2.x")]
+    SD2,
+    [EnumMember(Value = "SD 3")]
+    SD3,
+    [EnumMember(Value = "SD 3.5")]
+    SD35,
+    [EnumMember(Value = "SD 3.5 Medium")]
+    SD35Medium,
+    [EnumMember(Value = "SD 3.5 Large")]
+    SD35Large,
+    [EnumMember(Value = "SD 3.5 Large Turbo")]
+    SD35LargeTurbo,
+    Pony,
+    [EnumMember(Value = "FLUX.1 schnell")]
+    Flux1S,
+    [EnumMember(Value = "Flux.1 dev")]
+    Flux1D,
+    [EnumMember(Value = "Flux.1 Kontext")]
+    Flux1Kontext,
+    HiDream,
+    AuraFlow,
+    [EnumMember(Value = "SDXL Lightning")]
+    SDXLLightning,
+    SVD,
+    [EnumMember(Value = "PixArt-α")]
+    PixArtA,
+    [EnumMember(Value = "PixArt-Σ")]
+    PixArtE,
+    [EnumMember(Value = "Hunyuan 1.x")]
+    Hunyuan1,
+    HunyuanVideo,
+    Lumina,
+    Kolors,
+    Illustrious,
+    Mochi,
+    LTXV,
+    CogVideoX,
+    NoobAI,
+    [EnumMember(Value = "WanVideo 1.3B")]
+    WanVideo13B,
+    [EnumMember(Value = "WanVideo 14B")]
+    WanVideo14B,
+    [EnumMember(Value = "WanVideo 14B 480p")]
+    WanVideo14B480p,
+    [EnumMember(Value = "WanVideo 14B 720p")]
+    WanVideo14B720p,
+    Other,
+}
+
 public enum ComfyWorkflowType
 {
     TextToImage,
@@ -127,7 +181,7 @@ public class WorkflowVersion : AuditBase
     [ForeignKey(typeof(Workflow))]
     public int ParentId { get; set; } //ComfyWorkflow.Id
     public string Version { get; set; }  //v1
-    public string? Name { get; set; }    // Version Name
+    public string Name { get; set; }    // Version Name
     public Dictionary<string,object?> Workflow { get; set; }
     public WorkflowInfo Info { get; set; }
     public List<string> Nodes { get; set; }
@@ -148,6 +202,10 @@ public class WorkflowVersion : AuditBase
 
 public class ParsedWorkflow
 {
+    public string BaseModel { get; set; }
+    public string Name => Info.Name;
+    public string Category => Info.Type.ToString().Replace("To", " to ");
+    public string Path => $"{Category}/{BaseModel}/{Info.Name}.json";
     public List<string> Nodes { get; set; }
     public List<string> Assets { get; set; }
     public WorkflowInfo Info { get; set; }
@@ -165,6 +223,13 @@ public class WorkflowInfo
     public ComfyPrimarySource Input { get; set; }
     public ComfyPrimarySource Output { get; set; }
     public List<ComfyInputDefinition> Inputs { get; set; } = [];
+    public List<AssetInfo> Assets { get; set; } = [];
+}
+
+public class AssetInfo
+{
+    public string Asset { get; set; }
+    public string Url { get; set; }
 }
 
 [DataContract]

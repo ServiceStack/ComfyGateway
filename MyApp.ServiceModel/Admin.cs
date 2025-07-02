@@ -19,6 +19,7 @@ public class GetAppDataResponse
     public Dictionary<string, int> AgentEventCounts { get; set; }
     public List<AgentInfo> Agents { get; set; }
     public List<AiTaskInfo> QueuedAiTasks { get; set; }
+    public HashSet<string> DefaultGatewayNodes { get; set; } 
     public ResponseStatus? ResponseStatus { get; set; }
 }
 
@@ -202,72 +203,6 @@ public class MigrateToPostgres : IGet, IReturn<StringResponse>
 
 [Tag(Tags.Admin)]
 [ValidateIsAdmin]
-public class InstallPipPackage : IPost, IReturn<StringResponse>
-{
-    [ValidateNotEmpty, ValidateExactLength(32)]
-    public string DeviceId { get; set; }
-    [ValidateNotEmpty]
-    public string Package { get; set; }
-}
-
-[Tag(Tags.Admin)]
-[ValidateIsAdmin]
-public class InstallCustomNode : IPost, IReturn<StringResponse>
-{
-    [ValidateNotEmpty, ValidateExactLength(32)]
-    public string DeviceId { get; set; }
-    [ValidateNotEmpty]
-    public string RepoUrl { get; set; }
-}
-
-[Tag(Tags.Admin)]
-[ValidateIsAdmin]
-public class InstallModel : IPost, IReturn<StringResponse>
-{
-    [ValidateNotEmpty, ValidateExactLength(32)]
-    public string DeviceId { get; set; }
-    
-    [ValidateNotEmpty]
-    public string SaveTo { get; set; }
-
-    [ValidateNotEmpty]
-    public string Url { get; set; }
-
-    public string? Token { get; set; }
-}
-
-
-[Tag(Tags.Admin)]
-[ValidateIsAdmin]
-public class RebootAgent : IPost, IReturn<StringResponse>
-{
-    [ValidateNotEmpty, ValidateExactLength(32)]
-    public string DeviceId { get; set; }
-}
-
-[Tag(Tags.Admin)]
-[ValidateIsAdmin]
-public class GetDeviceStatus : IGet, IReturn<GetDeviceStatusResponse>
-{
-    [ValidateNotEmpty, ValidateExactLength(32)]
-    public string DeviceId { get; set; }
-}
-public class GetDeviceStatusResponse
-{
-    public string DeviceId { get; set; }
-    public List<string>? RequirePip { get; set; }
-    public List<string>? RequireNodes { get; set; }
-    public List<string>? RequireModels { get; set; }
-
-    public string? Status { get; set; }
-    public string? Logs { get; set; }
-    public ResponseStatus? Error { get; set; }
-
-    public ResponseStatus? ResponseStatus { get; set; }
-}
-
-[Tag(Tags.Admin)]
-[ValidateIsAdmin]
 public class AiChat : IPost, IReturn<StringResponse>
 {
     public string? Model { get; set; }
@@ -338,4 +273,11 @@ public class UpdateWorkflowVersionResponse
     public List<string> Assets { get; set; }
     public WorkflowInfo Info { get; set; }
     public ResponseStatus? ResponseStatus { get; set; }
+}
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class ParseWorkflowVersions : IPost, IReturn<StringsResponse>
+{
+    public int? VersionId { get; set; }
 }

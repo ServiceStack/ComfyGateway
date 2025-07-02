@@ -35,18 +35,22 @@ public class ComfyAgent
     public List<GpuInfo>? Gpus { get; set; }
     public List<string> Workflows { get; set; }
     public List<string> Nodes { get; set; }
-    public List<string> Checkpoints { get; set; }
-    public List<string> Unets { get; set; }
-    public List<string> Vaes { get; set; }
-    public List<string> Loras { get; set; }
-    public List<string> Clips { get; set; }
-    public List<string> ClipVisions { get; set; }
-    public List<string> Upscalers { get; set; }
-    public List<string> ControlNets { get; set; }
-    public List<string> Embeddings { get; set; }
-    public List<string> Stylers { get; set; }
-    public List<string> Gligens { get; set; }
-    public List<string> PhotoMakers { get; set; }
+    public List<string> Checkpoints { get; set; }     // folders: checkpoints
+    public List<string> Clip { get; set; }            // folders: clip, text_encoders
+    public List<string> ClipVision { get; set; }      // folders: clip_vision
+    public List<string> Configs { get; set; }         // folders: configs
+    public List<string> Controlnet { get; set; }      // folders: controlnet
+    public List<string> Diffusers { get; set; }       // folders: diffusers
+    public List<string> DiffusionModels { get; set; } // folders: diffusion_models, unet
+    public List<string> Embeddings { get; set; }      // folders: embeddings
+    public List<string> Gligen { get; set; }          // folders: gligen
+    public List<string> Hypernetworks { get; set; }   // folders: hypernetworks
+    public List<string> Loras { get; set; }           // folders: loras
+    public List<string> Photomaker { get; set; }      // folders: photomaker
+    public List<string> StyleModels { get; set; }     // folders: style_models
+    public List<string> UpscaleModels { get; set; }   // folders: upscale_models
+    public List<string> Vae { get; set; }             // folders: vae
+    public List<string> VaeApprox { get; set; }       // folders: vae_approx
     public bool Enabled { get; set; }
     public DateTime? OfflineDate { get; set; }
     public DateTime CreatedDate { get; set; }
@@ -69,7 +73,12 @@ public class ComfyAgent
     public List<string>? RequireNodes { get; set; }
     [PgSqlJsonB]
     public List<string>? RequireModels { get; set; }
+    [PgSqlJsonB]
+    public ComfyAgentSettings Settings { get; set; }
 
+    public string? Downloading { get; set; }
+    public string? Downloaded { get; set; }
+    public string? DownloadFailed { get; set; }
     public string? Status { get; set; }
     public string? Logs { get; set; }
     public ResponseStatus? Error { get; set; }
@@ -77,6 +86,14 @@ public class ComfyAgent
 
     [Ignore]
     public string ShortId => (DeviceId?[..4] ?? "").ToUpper();
+
+    long updates;
+    [Ignore] public long Updates => Interlocked.Read(ref updates);
+    public void SetLastUpdate(DateTime? date=null)
+    {
+        Interlocked.Increment(ref updates);
+        ModifiedDate = LastUpdate = date ?? DateTime.UtcNow;
+    }
 
     [Ignore]
     public DateTime LastUpdate { get; set; }
@@ -92,6 +109,11 @@ public class ComfyAgent
 
     [Ignore] 
     public HashSet<string> QueuedIds { get; set; } = [];
+}
+
+public class ComfyAgentSettings
+{
+    public bool? PreserveOutputs { get; set; }
 }
 
 public class NodeInfo

@@ -9,20 +9,23 @@ public class AgentInfo
     public int Id { get; set; }
     public string ShortId { get; set; }
     public List<GpuInfo>? Gpus { get; set; }
-    public List<string> Workflows { get; set; }
     public List<string> Nodes { get; set; }
-    public List<string> Checkpoints { get; set; }
-    public List<string> Unets { get; set; }
-    public List<string> Vaes { get; set; }
-    public List<string> Loras { get; set; }
-    public List<string> Clips { get; set; }
-    public List<string> ClipVisions { get; set; }
-    public List<string> Upscalers { get; set; }
-    public List<string> ControlNets { get; set; }
-    public List<string> Embeddings { get; set; }
-    public List<string> Stylers { get; set; }
-    public List<string> Gligens { get; set; }
-    public List<string> PhotoMakers { get; set; }
+    public List<string> Checkpoints { get; set; }     // folders: checkpoints
+    public List<string> Clip { get; set; }            // folders: clip, text_encoders
+    public List<string> ClipVision { get; set; }      // folders: clip_vision
+    public List<string> Configs { get; set; }         // folders: configs
+    public List<string> Controlnet { get; set; }      // folders: controlnet
+    public List<string> Diffusers { get; set; }       // folders: diffusers
+    public List<string> DiffusionModels { get; set; } // folders: diffusion_models, unet
+    public List<string> Embeddings { get; set; }      // folders: embeddings
+    public List<string> Gligen { get; set; }          // folders: gligen
+    public List<string> Hypernetworks { get; set; }   // folders: hypernetworks
+    public List<string> Loras { get; set; }           // folders: loras
+    public List<string> Photomaker { get; set; }      // folders: photomaker
+    public List<string> StyleModels { get; set; }     // folders: style_models
+    public List<string> UpscaleModels { get; set; }   // folders: upscale_models
+    public List<string> Vae { get; set; }             // folders: vae
+    public List<string> VaeApprox { get; set; }       // folders: vae_approx
     public List<string>? LanguageModels { get; set; }
     public bool Enabled { get; set; }
     public DateTime? OfflineDate { get; set; }
@@ -37,7 +40,12 @@ public class OwnerAgentInfo : AgentInfo
 {
     public string DeviceId { get; set; }
     public string UserId { get; set; }
+    public string? UserName { get; set; }
     public string? LastIp { get; set; }
+    public string? Downloading { get; set; }
+    public string? Downloaded { get; set; }
+    public string? DownloadFailed { get; set; }
+    public string? Status { get; set; }
 }
 
 public class ComfyTask
@@ -339,4 +347,25 @@ public class ParseWorkflow : IPost, IReturn<ParsedWorkflow>
     
     [Input(Type = "file")]
     public string? File { get; set; }
+}
+
+[Tag(Tags.Comfy)]
+[ValidateIsAuthenticated]
+public class UploadNewWorkflow : IPost, IReturn<UploadNewWorkflowResponse>
+{
+    public string? WorkflowName { get; set; }
+    
+    [ValidateNotEmpty]
+    public BaseModel? BaseModel { get; set; }
+
+    [Input(Type = "file")]
+    public string? Workflow { get; set; }
+}
+public class UploadNewWorkflowResponse
+{
+    public int VersionId { get; set; }
+    public List<string> Nodes { get; set; }
+    public List<string> Assets { get; set; }
+    public WorkflowInfo Info { get; set; }
+    public ResponseStatus? ResponseStatus { get; set; }
 }

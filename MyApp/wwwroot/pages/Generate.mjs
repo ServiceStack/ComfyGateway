@@ -175,27 +175,31 @@ export default {
         async function selectWorkflowVersion(versionId) {
             if (!versionId) return
 
-            const workflow = await store.getWorkflow(versionId)
-            if (!workflow) {
-                console.error(`Workflow Version '${versionId}' not found`)
-                return
-            }
-            selectedVersionId.value = versionId
-
-            let args = {}
-            // When selecting a new workflow within an existing thread retain positivePrompt, width, height
-            if (workflowArgs.value.positivePrompt) {
-                args = {
-                    positivePrompt: workflowArgs.value.positivePrompt,
-                    width: workflowArgs.value.width,
-                    height: workflowArgs.value.height,
-                    batchSize: workflowArgs.value.batchSize,
+            try {
+                const workflow = await store.getWorkflow(versionId)
+                if (!workflow) {
+                    console.error(`Workflow Version '${versionId}' not found`)
+                    return
                 }
+                selectedVersionId.value = versionId
+    
+                let args = {}
+                // When selecting a new workflow within an existing thread retain positivePrompt, width, height
+                if (workflowArgs.value.positivePrompt) {
+                    args = {
+                        positivePrompt: workflowArgs.value.positivePrompt,
+                        width: workflowArgs.value.width,
+                        height: workflowArgs.value.height,
+                        batchSize: workflowArgs.value.batchSize,
+                    }
+                }
+                selectedWorkflow.value = workflow
+                //updateAdvancedArgs(args)
+                selectedWorkflowInfo.value = await store.getWorkflowInfo(workflow.pinVersionId)
+                updateAdvancedArgs(args)
+            } catch (e) {
+                console.error('Failed to select workflow', e)
             }
-            selectedWorkflow.value = workflow
-            //updateAdvancedArgs(args)
-            selectedWorkflowInfo.value = await store.getWorkflowInfo(workflow.pinVersionId)
-            updateAdvancedArgs(args)
         }
 
         function updateAdvancedArgs(args) {

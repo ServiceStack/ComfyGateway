@@ -17,7 +17,7 @@ export default {
 <div>
   <div class="flex items-center justify-center w-full">
     <label :for="id"
-      :class="[isDragging ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700 border-dashed', 'relative flex flex-col items-center justify-center w-full h-64 border-2 rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700']"
+      :class="[isDragging ? 'border-blue-500' : 'border-gray-300 dark:border-gray-600 border-dashed', 'relative flex flex-col items-center justify-center w-full h-64 border-2 rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800']"
       @dragenter="isDragging = true"
       @dragleave="isDragging = false"
       @dragover.prevent
@@ -26,7 +26,7 @@ export default {
       <slot v-if="$slots.default"></slot>
       <div v-else class="flex flex-col items-center justify-center">
         <slot v-if="$slots.icon" name="icon"></slot>
-        <svg v-else class="w-12 h-12 mb-3 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <svg v-else class="size-12 mb-3 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
         </svg>
         <p class="mb-2 text-gray-500 dark:text-gray-400">
@@ -52,7 +52,7 @@ export default {
 
         <div v-if="!multiple">
             <div v-if="src" class="absolute top-8 left-8 shrink-0 cursor-pointer" :title="!isDataUri(src) ? src : ''">
-                <img @click="openFile" :class="['h-48 w-48', imgCls(src)]" :alt="'Current ' + (useLabel??'')"
+                <img @click="openFile" :class="['size-48', imgCls(src)]" :alt="'Current ' + (useLabel??'')"
                     :src="fallbackSrc || assetsPathResolver(src)"
                     @error="onError">
             </div>
@@ -111,6 +111,7 @@ export default {
         files:Array,  //UploadedFile[]
         accept: String,
         acceptLabel: String,
+        hidePlaceholderOnSelect: Boolean,
     },
     setup(props, { emit, expose }) {
         /** @typedef {Object} UploadedFile */

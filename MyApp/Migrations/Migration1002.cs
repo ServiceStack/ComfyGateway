@@ -32,7 +32,7 @@ public class Migration1002 : MigrationBase
         [ForeignKey(typeof(Workflow))]
         public int ParentId { get; set; } //ComfyWorkflow.Id
         public string Version { get; set; }  //v1
-        public string? Name { get; set; }    // Version Name
+        public string Name { get; set; }    // Version Name
         public Dictionary<string,object?> Workflow { get; set; }
         public ComfyWorkflowInfo Info { get; set; }
         public List<string> Nodes { get; set; }

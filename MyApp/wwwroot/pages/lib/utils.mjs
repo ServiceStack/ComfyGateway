@@ -168,6 +168,24 @@ export function sortByModifiedAsc(rows) {
     return rows
 }
 
+export function validUrl(url) {
+    if (!url) return false
+    try {
+        new URL(url)
+        return true
+    } catch (e) {
+        return false
+    }
+}
+
+export function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+export function pluralize(word, count) {
+    return count === 1 ? word : word + 's'
+}
+
 export const acceptedImages = `${wordList('WEBP,JPG,PNG,GIF,BMP,TIFF')} (max 5MB)`
 export const acceptedVideos = `${wordList('MP4,MOV,WEBM,MKV,AVI,WMV,OGG')} (max 50MB)`
 export const acceptedAudios = `${wordList('MP3,M4A,AAC,FLAC,WAV,WMA')} (max 10MB)`

@@ -1,8 +1,8 @@
-import { reactive, toRaw } from "vue"
+import {reactive, ref, toRaw} from "vue"
 import { useAuth } from "@servicestack/vue"
 import { JsonServiceClient, ApiResult, combinePaths, rightPart } from "@servicestack/client"
 import { openDB, deleteDB, wrap, unwrap } from '/lib/mjs/idb.mjs'
-import { toJsonObject, toJsonArray, sortByCreatedDesc, sortByModifiedDesc, getRatingDisplay } from "./utils.mjs"
+import { toJsonObject, toJsonArray, sortByCreatedDesc, sortByModifiedDesc, getRatingDisplay, pluralize } from "./utils.mjs"
 import {
     QueryWorkflows,
     GetWorkflowInfo,
@@ -34,8 +34,11 @@ import {
     FeatureArtifact,
     UnFeatureArtifact,
     RemoveDevice,
+    QueryArtifacts, 
+    DevicePool, 
+    MyDevices,
     Rating,
-    Table, QueryArtifacts,
+    Table, 
 } from "../../mjs/dtos.mjs"
 
 export const AssetsBasePath = globalThis.AssetsBasePath = globalThis.Server?.app.baseUrl ?? location.origin
@@ -120,6 +123,13 @@ let o = {
     artifactReactions:{},
     /** @type {{ [index:string]: number[]; }} */
     workflowVersionReactions:{},
+
+    /** @type {AgentInfo[]} */
+    poolDevices: [],
+    /** @type {AgentInfo[]} */
+    myDevices: [],
+    /** @type {AgentInfo[]} */
+    allDevices: [],
     
     async init(client) {
         console.log('store.init', this._init, useAuth().user?.value?.userName)
@@ -240,17 +250,40 @@ let o = {
     },
 
     async clearAppDb() {
-        await this.clearDb(AppDatabase)
+        console.log('clearAppDb')
+        await this.clearAllObjectStores(UserDatabase)
     },
 
     async clearUserDb() {
-        await this.clearDb(UserDatabase)
+        console.log('clearUserDb')
+        await this.clearAllObjectStores(UserDatabase)
     },
 
-    async clearDb(dbName) {
-        console.log('clearDb', dbName)
-        // Request to remove all records from the database
-        this.db(dbName)?.clear()
+    clearAllObjectStores(dbName) {
+        return new Promise((resolve, reject) => {
+            const openRequest = indexedDB.open(dbName);
+            openRequest.onsuccess = function(event) {
+                const db = event.target.result;
+                const tx = db.transaction(db.objectStoreNames, 'readwrite');
+    
+                // Clear each object store
+                for (let storeName of db.objectStoreNames) {
+                    const store = tx.objectStore(storeName);
+                    store.clear();
+                }
+                tx.oncomplete = function() {
+                    db.close();
+                    resolve('All object stores cleared');
+                };
+                tx.onerror = function() {
+                    db.close();
+                    reject('Error clearing object stores');
+                };
+            };
+            openRequest.onerror = function() {
+                reject('Error opening database');
+            };
+        });
     },
     
     async resetAndDestroy() {
@@ -313,6 +346,8 @@ let o = {
         const tasks = [
             this.loadWorkflowsAndVersions(),
             this.processDeletedRows(),
+            this.loadPoolDevices(),
+            this.loadMyDevices(),
         ]
         if (this.user) {
             tasks.push(
@@ -1152,7 +1187,108 @@ let o = {
         const useRating = rating === 'PG-13' ? 'PG13' : rating
         const isViewable = !rating || this.selectedRatings.includes(useRating)
         return isViewable
-    }
+    },
+    
+    combineAssets(device) {
+        const assets = new Set()
+        for (const asset of device.checkpoints ?? []) {
+            assets.add(`checkpoints/${asset}`)
+        }
+        for (const asset of device.clip ?? []) {
+            assets.add(`clip/${asset}`)
+        }
+        for (const asset of device.clipVision ?? []) {
+            assets.add(`clip_vision/${asset}`)
+        }
+        for (const asset of device.controlnet ?? []) {
+            assets.add(`controlnet/${asset}`)
+        }
+        for (const asset of device.diffusionModels ?? []) {
+            assets.add(`diffusion_models/${asset}`)
+        }
+        for (const asset of device.embeddings ?? []) {
+            assets.add(`embeddings/${asset}`)
+        }
+        for (const asset of device.gligen ?? []) {
+            assets.add(`gligen/${asset}`)
+        }
+        for (const asset of device.loras ?? []) {
+            assets.add(`loras/${asset}`)
+        }
+        for (const asset of device.photomaker ?? []) {
+            assets.add(`photomaker/${asset}`)
+        }
+        for (const asset of device.styleModels ?? []) {
+            assets.add(`style_models/${asset}`)
+        }
+        for (const asset of device.upscaleModels ?? []) {
+            assets.add(`upscale_models/${asset}`)
+        }
+        for (const asset of device.vae ?? []) {
+            assets.add(`vae/${asset}`)
+        }
+        return Array.from(assets).sort()
+    },
+    
+    populateAllDevices() {
+        this.allDevices = [...this.myDevices]
+        this.allDevices.push(...this.poolDevices.filter(x => !this.myDevices.find(y => y.id === x.id)))
+    },
+    
+    // Devices
+    async loadPoolDevices(args={}) {
+        const api = await this._client.api(new DevicePool(args))
+        if (api.succeeded) {
+            this.poolDevices = api.response.results
+            this.populateAllDevices()
+        }
+        return api
+    },
+    async loadMyDevices(args={}) {
+        const api = await this._client.api(new MyDevices(args))
+        if (api.succeeded) {
+            this.myDevices = api.response.results
+            this.populateAllDevices()
+        }
+        return api
+    },
+
+    isCompatible(workflowVersion, device) { 
+        return this.compatibleErrors(workflowVersion, device) == null 
+    },
+    compatibleErrors(workflowVersion, device) {
+        const missingNodes = []
+        const missingAssets = []
+        // Verify device has all required nodes
+        for (const node of workflowVersion.nodes) {
+            if (!device.nodes.includes(node)) {
+                missingNodes.push(node)
+            }
+        }
+        
+        // Verify device has all required assets
+        if (!device.assets) {
+            device.assets = this.combineAssets(device)
+        }
+        for (const asset of workflowVersion.assets) {
+            if (!device.assets.includes(asset)) {
+                missingAssets.push(asset)
+            }
+        }
+        return missingNodes.length || missingAssets.length 
+            ? { missingNodes, missingAssets }
+            : null
+    },
+    allCompatibleDevices(workflowVersion) {
+        return this.allDevices.filter(x => this.isCompatible(workflowVersion, x))
+    },
+    compatibleDevices(workflowVersion, devices) {
+        return devices.filter(x => this.isCompatible(workflowVersion, x))
+    },
+    deviceLabel(device) {
+        return device.shortId + ' - ' + (device.gpus?.[0]?.name || '') + (device.lastIp ? (' @ ' + device.lastIp) : '')
+    },
+    
 }
 
 let store = reactive(o)

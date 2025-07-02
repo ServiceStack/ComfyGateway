@@ -54,12 +54,11 @@ public class AgentServices(ILogger<AgentServices> log,
             return new EmptyResponse();
         }
 
+        agent.SetLastUpdate();
         agent.QueueCount = request.QueueCount;
         agent.RunningGenerationIds = request.RunningGenerationIds ?? [];
         agent.QueuedGenerationIds = request.QueuedGenerationIds ?? [];
         agent.QueuedIds = [..agent.QueuedGenerationIds, ..agent.RunningGenerationIds];
-        agent.LastUpdate = DateTime.UtcNow;
-        agent.ModifiedDate = DateTime.UtcNow;
         agent.Gpus = request.Gpus ?? agent.Gpus;
         agent.RunningGenerationIds = request.RunningGenerationIds ?? [];
         agent.QueuedGenerationIds = request.QueuedGenerationIds ?? [];
@@ -68,7 +67,7 @@ public class AgentServices(ILogger<AgentServices> log,
         {
             QueueCount = agent.QueueCount,
             Gpus = agent.Gpus,
-            ModifiedDate = now,
+            ModifiedDate = agent.ModifiedDate,
             LastIp = Request!.UserHostAddress,
         }, where: x => x.DeviceId == request.DeviceId);
         
@@ -107,14 +106,40 @@ public class AgentServices(ILogger<AgentServices> log,
             return new EmptyResponse();
         }
 
+        agent.Status = request.Status ?? agent.Status;
+        agent.Downloading = request.Downloading ?? agent.Downloading;
+        agent.Downloaded = request.Downloaded ?? agent.Downloaded;
+        agent.DownloadFailed = request.DownloadFailed ?? agent.DownloadFailed;
+        agent.Logs = request.Logs ?? agent.Logs;
+        agent.Error = request.Error ?? agent.Error;
+        agent.SetLastUpdate(now);
+
         using var db = Db;
-        db.UpdateOnly(() => new ComfyAgent
+        if (request.Logs != null)
         {
-            Status = request.Status ?? agent.Status,
-            Logs = request.Logs ?? agent.Logs,
-            Error = request.Error ?? agent.Error,
-            ModifiedDate = now,
-        }, where: x => x.DeviceId == request.DeviceId);
+            db.UpdateOnly(() => new ComfyAgent
+            {
+                Status = agent.Status,
+                Downloading = agent.Downloading,
+                Downloaded = agent.Downloaded,
+                DownloadFailed = agent.DownloadFailed,
+                Logs = agent.Logs,
+                Error = agent.Error,
+                ModifiedDate = agent.ModifiedDate,
+            }, where: x => x.DeviceId == request.DeviceId);
+        }
+        else
+        {
+            db.UpdateOnly(() => new ComfyAgent
+            {
+                Status = agent.Status,
+                Downloading = agent.Downloading,
+                Downloaded = agent.Downloaded,
+                DownloadFailed = agent.DownloadFailed,
+                Error = agent.Error,
+                ModifiedDate = now,
+            }, where: x => x.DeviceId == request.DeviceId);
+        }
         
         return new EmptyResponse();
     }
@@ -150,7 +175,7 @@ public class AgentServices(ILogger<AgentServices> log,
             ret.Results.Add(new AgentEvent { Name = EventMessages.Register });
             return ret;
         }
-        agent.ModifiedDate = agent.LastUpdate = DateTime.UtcNow;
+        agent.SetLastUpdate();
 
         // Return any pending events immediately
         var agentEvents = agentManager.GetAgentEvents(agent.DeviceId);
@@ -271,11 +296,13 @@ public class AgentServices(ILogger<AgentServices> log,
                 RequireNodes = appData.RequireNodes,
                 RequireModels = appData.RequireModels,
                 DevicePool = DateTime.UtcNow,
+                Settings = new ComfyAgentSettings {
+                    PreserveOutputs = false,
+                },
             };
         }
         
-        agent.LastUpdate = DateTime.UtcNow;
-
+        agent.SetLastUpdate();
         agent.Version = request.Version;
         agent.ComfyVersion = request.ComfyVersion;
         agent.Gpus = request.Gpus;
@@ -286,9 +313,9 @@ public class AgentServices(ILogger<AgentServices> log,
         agent.ApiKey = apiKey.Key;
         agent.Enabled = true;
         agent.OfflineDate = null;
-        agent.ModifiedDate = DateTime.UtcNow;
         agent.LastIp = Request.UserHostAddress;
         agent.LanguageModels = request.LanguageModels;
+        agent.Downloading = null;
         agent.Status = "Registered";
         agent.Logs = null;
         agent.Error = null;
@@ -298,25 +325,37 @@ public class AgentServices(ILogger<AgentServices> log,
         agent.Checkpoints = sorted(checkpointLoader.GetInput("ckpt_name")?.EnumValues);
 
         if (nodeDefs.TryGetValue("UNETLoader", out var unetLoader))
-            agent.Unets = sorted(unetLoader.GetInput("unet_name")?.EnumValues);
+            agent.DiffusionModels = sorted(unetLoader.GetInput("unet_name")?.EnumValues);
         if (nodeDefs.TryGetValue("VAELoader", out var vaeLoader))
-            agent.Vaes = sorted(vaeLoader.GetInput("vae_name")?.EnumValues);
+            agent.Vae = sorted(vaeLoader.GetInput("vae_name")?.EnumValues);
         if (nodeDefs.TryGetValue("CLIPLoader", out var clipLoader))
-            agent.Clips = sorted(clipLoader.GetInput("clip_name")?.EnumValues);
+            agent.Clip = sorted(clipLoader.GetInput("clip_name")?.EnumValues);
         if (nodeDefs.TryGetValue("CLIPVisionLoader", out var clipVisionLoader))
-            agent.ClipVisions = sorted(clipVisionLoader.GetInput("clip_name")?.EnumValues);
+            agent.ClipVision = sorted(clipVisionLoader.GetInput("clip_name")?.EnumValues);
         if (nodeDefs.TryGetValue("LoraLoader", out var loraLoader))
             agent.Loras = sorted(loraLoader.GetInput("lora_name")?.EnumValues);
         if (nodeDefs.TryGetValue("UpscaleModelLoader", out var upscaleLoader))
-            agent.Upscalers = sorted(upscaleLoader.GetInput("model_name")?.EnumValues);
+            agent.UpscaleModels = sorted(upscaleLoader.GetInput("model_name")?.EnumValues);
         if (nodeDefs.TryGetValue("ControlNetLoader", out var controlNetLoader))
-            agent.ControlNets = sorted(controlNetLoader.GetInput("control_net_name")?.EnumValues);
+            agent.Controlnet = sorted(controlNetLoader.GetInput("control_net_name")?.EnumValues);
         if (nodeDefs.TryGetValue("StyleModelLoader", out var styleLoader))
-            agent.Stylers = sorted(styleLoader.GetInput("style_model_name")?.EnumValues);
+            agent.StyleModels = sorted(styleLoader.GetInput("style_model_name")?.EnumValues);
         if (nodeDefs.TryGetValue("PhotoMakerLoader", out var photoMakerLoader))
-            agent.PhotoMakers = sorted(photoMakerLoader.GetInput("photomaker_model_name")?.EnumValues);
+            agent.Photomaker = sorted(photoMakerLoader.GetInput("photomaker_model_name")?.EnumValues);
         if (nodeDefs.TryGetValue("GLIGENLoader", out var gligenLoader))
-            agent.Gligens = sorted(gligenLoader.GetInput("gligen_name")?.EnumValues);
+            agent.Gligen = sorted(gligenLoader.GetInput("gligen_name")?.EnumValues);
+        
+        //TODO Verify predicted locations
+        agent.Hypernetworks = sorted(nodeDefs.TryGetValue("HypernetworkLoader", out var hypernetworkLoader) 
+            ? hypernetworkLoader.GetInput("hypernetwork_name")?.EnumValues : null);
+        agent.Diffusers = sorted(nodeDefs.TryGetValue("DiffusersLoader", out var diffusersLoader) 
+            ? diffusersLoader.GetInput("model_path")?.EnumValues : null); // diffusers_name?
+        agent.Embeddings = sorted(nodeDefs.TryGetValue("TextualInversionLoader", out var textualInversionLoader) 
+            ? textualInversionLoader.GetInput("textual_inversion_name")?.EnumValues : null);
+        agent.Configs = sorted(nodeDefs.TryGetValue("ConfigLoader", out var configLoader) 
+            ? configLoader.GetInput("config_name")?.EnumValues : null);
+        agent.VaeApprox = sorted(nodeDefs.TryGetValue("VAEApproxLoader", out var vaeApproxLoader) 
+            ? vaeApproxLoader.GetInput("vae_approx_name")?.EnumValues : null);
         
         db.Save(agent);
 
@@ -353,6 +392,7 @@ public class AgentServices(ILogger<AgentServices> log,
             RequirePip = appData.RequirePip,
             RequireNodes = appData.RequireNodes,
             RequireModels = appData.RequireModels,
+            Settings = agent.Settings,
         };
         
         return ret;

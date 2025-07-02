@@ -78,14 +78,8 @@ export default {
             </p>
         </div>
 
-        <!-- Loading State -->
-        <div v-if="loading" class="flex items-center justify-center py-12">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            <span class="ml-3 text-gray-600 dark:text-gray-400">Loading devices...</span>
-        </div>
-
         <!-- Empty State -->
-        <div v-else-if="devices.length === 0" class="text-center py-12">
+        <div v-if="store.myDevices.length === 0" class="text-center py-12">
             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
@@ -153,7 +147,7 @@ export default {
 
         <!-- Devices Grid -->
         <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <DeviceInfo v-for="device in devices" :device="device" @deleted="devices = devices.filter(x => x.id != device.id)" />
+            <DeviceInfo v-for="device in store.myDevices" :device="device" @deleted="store.myDevices = store.myDevices.filter(x => x.id != device.id)" />
         </div>
     </div>
     `,
@@ -161,28 +155,25 @@ export default {
         const client = useClient()
         const { user } = useAuth()
         const store = inject('store')
-        /** @type {Ref<AgentInfo[]>} */
-        const devices = ref([])
         const apiKey = ref('')
-        const loading = ref(true)
+        const loading = ref(false)
         let updateTimer = null
 
         async function update() {
             const startedAt = Date.now()
+            loading.value = true
             try {
-                const lastUpdate = devices.value.length 
-                    ? devices.value.map(x => x.lastUpdate).sort().pop() 
+                const lastUpdate = store.myDevices.length 
+                    ? store.myDevices.map(x => x.lastUpdate).sort().pop() 
                     : null
                 const request = new MyDevices()
                 if (lastUpdate) {
                     request.afterModifiedDate = lastUpdate
                 }
-                const api = await client.api(request)
+                const api = await store.loadMyDevices(request)
                 if (api.succeeded) {
-                    devices.value = api.response.results
-                    // devices.value.length = 0
-                    console.log('MyDevices GPUs', Inspect.printDump(devices.value.map(x => x.gpus)),
-                        devices.value.map(x => x.queueCount))
+                    console.log('MyDevices GPUs', Inspect.printDump(store.myDevices.map(x => x.gpus)),
+                        store.myDevices.map(x => x.queueCount))
                 }
             } catch (error) {
                 console.error('Failed to load devices:', error)
@@ -212,7 +203,6 @@ export default {
 
         return {
             store,
-            devices,
             loading,
             apiKey,
             createApiKey,
