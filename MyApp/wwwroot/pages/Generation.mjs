@@ -1,8 +1,9 @@
 import { ref, computed, onMounted, onUnmounted, inject } from "vue"
 import { useRoute } from "vue-router"
-import { useClient, useFormatters, useUtils } from "@servicestack/vue"
+import {PrimaryButton, SelectInput, useClient, useFormatters, useUtils} from "@servicestack/vue"
 import { $1, leftPart, lastRightPart } from "@servicestack/client"
-import { QueryComments, CreateGenerationComment } from "../mjs/dtos.mjs"
+import { getHDClass, getRatingColorClass } from "./lib/utils.mjs"
+import { GetArtifactVariants, QueryComments, CreateGenerationComment } from "../mjs/dtos.mjs"
 import VisibilityIcon from "./components/VisibilityIcon.mjs"
 import ArtifactMenu from "./components/ArtifactMenu.mjs"
 import ArtifactReactions from "./components/ArtifactReactions.mjs"
@@ -10,6 +11,8 @@ import RatingsBadge from "./components/RatingsBadge.mjs"
 
 export default {
     components: {
+        SelectInput,
+        PrimaryButton,
         VisibilityIcon,
         ArtifactMenu,
         ArtifactReactions,
@@ -19,6 +22,11 @@ export default {
         <ErrorSummary :status="error" />
 
         <div v-if="selectedArtifact?.caption" class="mt-4 px-8 text-center overflow-hidden whitespace-nowrap overflow-ellipsis" :title="selectedArtifact.caption">
+            <span v-if="getHDClass(selectedArtifact.width, selectedArtifact.height)"
+                  class="mr-1 inline-flex items-center rounded-md font-bold ring-1 ring-inset transition-all duration-200 cursor-default"
+                  :class="('px-2 py-1 text-xs ') + getRatingColorClass('M')" :title="selectedArtifact.width + ' x ' + selectedArtifact.height">
+              {{getHDClass(selectedArtifact.width, selectedArtifact.height)}}
+            </span>
             {{selectedArtifact.caption}}
         </div>
             
@@ -66,6 +74,31 @@ export default {
                     <ArtifactReactions class="my-1 max-w-sm mx-auto" :artifact="selectedArtifact" @changed="selectedArtifact.reactions = $event.reactions" />
                 </div>
 
+              <!-- Artifact Gallery -->
+              <div v-if="artifacts.length > 1" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Generation Artifacts</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  <div v-for="artifact in artifacts" :key="artifact.id"
+                       class="bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-blue-500 relative"
+                       :class="{ 'ring-2 ring-blue-500': artifact.url === selectedUrl }"
+                       @click="selectedUrl = artifact.url">
+                    <img v-if="store.isRatingViewable(artifact)"
+                         :src="artifact.url"
+                         :alt="'Artifact ' + artifact.id"
+                         class="w-full object-cover">
+
+                    <!-- Ratings Guard for Thumbnails -->
+                    <div v-else class="w-full h-full py-8 text-center bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-2">
+                      <!-- Large Rating Tag -->
+                      <div class="flex justify-center mb-2">
+                        <RatingsBadge :artifact="artifact" />
+                      </div>
+                      <span class="text-xs text-gray-400">Restricted Content</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
                 <div v-if="selectedArtifact?.description" class="p-4 text-sm text-gray-600 dark:text-gray-400">
                     {{selectedArtifact.description}}
                 </div>
@@ -141,32 +174,8 @@ export default {
                     </div>
                 </div>
 
-                <!-- Artifact Gallery -->
-                <div v-if="artifacts.length > 1" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Generation Artifacts</h3>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                        <div v-for="artifact in artifacts" :key="artifact.id"
-                             class="bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-blue-500 relative"
-                             :class="{ 'ring-2 ring-blue-500': artifact.url === selectedUrl }"
-                             @click="selectedUrl = artifact.url">
-                            <img v-if="store.isRatingViewable(artifact)"
-                                 :src="artifact.url"
-                                 :alt="'Artifact ' + artifact.id"
-                                 class="w-full object-cover">
 
-                            <!-- Ratings Guard for Thumbnails -->
-                            <div v-else class="w-full h-full py-8 text-center bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-2">
-                                <!-- Large Rating Tag -->
-                                <div class="flex justify-center mb-2">
-                                    <RatingsBadge :artifact="artifact" />
-                                </div>
-                                <span class="text-xs text-gray-400">Restricted Content</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <ArtifactMenu v-if="menu" :menu="menu" @close="closeMenu" @delete="location.reload()" />
+              <ArtifactMenu v-if="menu" :menu="menu" @close="closeMenu" @delete="location.reload()" />
             </div>
 
             <!-- Right Sidebar -->
@@ -290,23 +299,23 @@ export default {
                     <div class="space-y-3 text-sm">
                         <div v-if="generation.checkpoint" class="flex justify-between">
                             <span class="text-gray-500 dark:text-gray-400">Checkpoint</span>
-                            <span class="text-gray-900 dark:text-gray-100">{{ generation.checkpoint }}</span>
+                            <span class="text-gray-900 dark:text-gray-100 max-w-48 truncate" :title="generation.checkpoint">{{ generation.checkpoint }}</span>
                         </div>
                         <div v-if="generation.lora" class="flex justify-between">
                             <span class="text-gray-500 dark:text-gray-400">LoRA</span>
-                            <span class="text-gray-900 dark:text-gray-100">{{ generation.lora }}</span>
+                            <span class="text-gray-900 dark:text-gray-100 max-w-48 truncate" :title="generation.lora">{{ generation.lora }}</span>
                         </div>
                         <div v-if="generation.vae" class="flex justify-between">
                             <span class="text-gray-500 dark:text-gray-400">VAE</span>
-                            <span class="text-gray-900 dark:text-gray-100">{{ generation.vae }}</span>
+                            <span class="text-gray-900 dark:text-gray-100 max-w-48 truncate" :title="generation.vae">{{ generation.vae }}</span>
                         </div>
                         <div v-if="generation.controlNet" class="flex justify-between">
                             <span class="text-gray-500 dark:text-gray-400">ControlNet</span>
-                            <span class="text-gray-900 dark:text-gray-100">{{ generation.controlNet }}</span>
+                            <span class="text-gray-900 dark:text-gray-100 max-w-48 truncate" :title="generation.controlNet">{{ generation.controlNet }}</span>
                         </div>
                         <div v-if="generation.upscaler" class="flex justify-between">
                             <span class="text-gray-500 dark:text-gray-400">Upscaler</span>
-                            <span class="text-gray-900 dark:text-gray-100">{{ generation.upscaler }}</span>
+                            <span class="text-gray-900 dark:text-gray-100 max-w-48 truncate" :title="generation.upscaler">{{ generation.upscaler }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-500 dark:text-gray-400">Credits</span>
@@ -349,7 +358,7 @@ export default {
                                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400 capitalize">
                                     {{ formatFieldName(field) }}
                                 </span>
-                                <span class="text-sm text-gray-900 dark:text-gray-100 text-right ml-4">
+                                <span class="text-sm text-gray-900 dark:text-gray-100 text-right ml-4 truncate" :title="formatFieldValue(value)">
                                     {{ formatFieldValue(value) }}
                                 </span>
                             </div>
@@ -357,6 +366,49 @@ export default {
                     </div>
                 </div>
 
+                <!-- Variant Gallery -->
+                <div v-if="store.workflowVersions.filter(x => x.info?.type === 'ImageToImage').length || variants.length" 
+                    class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Variants</h3>
+                    
+                    <div v-if="variants.length" class="grid grid-cols-2 gap-4">
+                      <a v-for="artifact in variants" :key="artifact.id"
+                           class="bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-blue-500 relative"
+                           :href="'/generations/' + artifact.generationId">
+                        <div v-if="getHDClass(artifact.width, artifact.height)" class="absolute top-1 left-1 flex items-center inline-flex rounded-sm bg-gray-200/50 dark:bg-gray-700/50 px-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-700/10">
+                          {{getHDClass(artifact.width, artifact.height)}}
+                        </div>
+                        <img v-if="store.isRatingViewable(artifact)"
+                             :src="artifact.url"
+                             :alt="'Artifact ' + artifact.id"
+                             class="w-full object-cover">
+                    
+                        <!-- Ratings Guard for Thumbnails -->
+                        <div v-else class="w-full h-full py-8 text-center bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-2">
+                          <!-- Large Rating Tag -->
+                          <div class="flex justify-center mb-2">
+                            <RatingsBadge :artifact="artifact" />
+                          </div>
+                          <span class="text-xs text-gray-400">Restricted Content</span>
+                        </div>
+                        <span v-if="artifact.variantName" class="px-1 text-xs text-center truncate" :title="artifact.variantName">{{artifact.variantName}}</span>
+                      </a>
+                    </div>
+                    
+                    <div class="mt-4 flex items-end gap-x-2">
+                      <SelectInput id="newVariant" v-model="newVariant" 
+                                   :entries="store.workflowVersions.filter(x => x.info?.type === 'ImageToImage').map(x => ({ key: x.id, value: x.name }))" />
+                      <div>
+                        <RouterLink :to="!newVariant ? '' : { path:'/generate/feed', query: { 'new':'', version:newVariant, image:lastRightPart(selectedArtifact.url,'/') } }"
+                                    class="inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-lg transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                                    :class="!newVariant ? 'bg-purple-800' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 hover:shadow-xl hover:scale-105 '"
+                                    title="Remix this generation with the same settings">
+                          Remix
+                        </RouterLink>
+                      </div>
+                    </div>
+                </div>
+              
             </div>
         </div>
     `,
@@ -369,6 +421,8 @@ export default {
 
         const generation = ref()
         const artifacts = ref([])
+        const variants = ref([])
+        const newVariant = ref('')
         const error = ref()
         const selectedUrl = ref()
         const comments = ref([])
@@ -469,9 +523,19 @@ export default {
             artifacts.value = api.response?.artifacts ?? []
             error.value = api.error
         }
+        
+        async function loadVariants() {
+            const api = await client.api(new GetArtifactVariants({
+                generationId: route.params.id
+            }))
+            variants.value = api.response?.results ?? []
+        }
 
         onMounted(async () => {
-            await loadGeneration()
+            await Promise.all([
+                loadGeneration(),
+                loadVariants(),
+            ])
             document.addEventListener("keydown", handleKeydown)
 
             // Set the selected URL, preferring posterImage, then first artifact URL
@@ -556,6 +620,8 @@ export default {
             menu,
             generation,
             artifacts,
+            variants,
+            newVariant,
             selectedUrl,
             selectedArtifact,
             workflow,
@@ -579,6 +645,8 @@ export default {
             showContextMenu,
             closeMenu,
             handleKeydown,
+            getHDClass,
+            getRatingColorClass,
         }
     }
 }

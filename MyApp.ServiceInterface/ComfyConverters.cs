@@ -270,7 +270,7 @@ public static class ComfyConverters
                             if (nodes.TryGetValue(originNodeId, out var originNode) && originNode.Type == "PrimitiveNode")
                             {
                                 // For PrimitiveNode, use the widget value directly
-                                if (originNode.WidgetsValues != null && originNode.WidgetsValues.Count > 0)
+                                if (originNode.WidgetsValues is { Count: > 0 })
                                 {
                                     apiNode.Inputs[inputDef.Key] = originNode.WidgetsValues[0];
                                 }
@@ -278,7 +278,7 @@ public static class ComfyConverters
                             else
                             {
                                 // Add connection: [origin_id, origin_slot]
-                                apiNode.Inputs[inputDef.Key] = new[]
+                                apiNode.Inputs[inputDef.Key] = new List<object>
                                 {
                                     link.OriginId,
                                     link.OriginSlotInt ?? (object)link.OriginSlot,
@@ -317,7 +317,7 @@ public static class ComfyConverters
                             if (nodes.TryGetValue(originNodeId, out var originNode) && originNode.Type == "PrimitiveNode")
                             {
                                 // For PrimitiveNode, use the widget value directly
-                                if (originNode.WidgetsValues != null && originNode.WidgetsValues.Count > 0)
+                                if (originNode.WidgetsValues is { Count: > 0 })
                                 {
                                     apiNode.Inputs[inputName] = originNode.WidgetsValues[0];
                                 }
@@ -325,7 +325,7 @@ public static class ComfyConverters
                             else
                             {
                                 // Add connection: [origin_id, origin_slot]
-                                apiNode.Inputs[inputName] = new[]
+                                apiNode.Inputs[inputName] = new List<object>
                                 {
                                     link.OriginId,
                                     link.OriginSlotInt ?? (object)link.OriginSlot,
@@ -389,7 +389,51 @@ public static class ComfyConverters
 
         return apiPrompt;
     }
+    
+    public static Dictionary<string, ApiNode> CreatePrompt(Dictionary<string, ApiNode> prompt, WorkflowInfo info, Dictionary<string, object?> args, ILogger? log=null)
+    {
+        log ??= NullLogger.Instance;
+        foreach (var input in info.Inputs)
+        {
+            var nodeId = input.NodeId.ToString();
+            if (!prompt.TryGetValue(nodeId, out var node))
+            {
+                log.LogWarning("Node {NodeId} not found in API prompt, Skipping.", nodeId);
+                continue;
+            }
 
+            var value = args.GetValueOrDefault(input.Name);
+            if (value == null)
+            {
+                log.LogWarning("No value found for input '{InputName}', Skipping.", input.Name);
+                continue;
+            }
+            
+            var inputName = input.Name;
+            if (input.Name is "positivePrompt" or "negativePrompt")
+            {
+                inputName = "text";
+            }
+            node.Inputs[inputName] = value;
+        }
+
+        // Remove instructive RequiresAsset nodes to avoid unnecessary processing 
+        var idsToRemove = new List<string>();
+        foreach (var node in prompt)
+        {
+            if (node.Value.ClassType == "RequiresAsset")
+            {
+                idsToRemove.Add(node.Key);
+            }
+        }
+        foreach (var id in idsToRemove)
+        {
+            prompt.Remove(id);
+        }
+        
+        return prompt;
+    }
+    
     public static WorkflowResult ParseComfyResult(Dictionary<string, object?> result, string? comfyApiBaseUrl = null)
     {
         var promptId = result.Keys.First();

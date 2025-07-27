@@ -1691,8 +1691,8 @@
         "Node name for S&R": "EmptyLatentImage"
       },
       "widgets_values": [
-        1024,
-        1024,
+        768,
+        1344,
         1
       ],
       "color": "#432",
@@ -2041,7 +2041,7 @@
     },
     {
       "id": 239,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -26.12823486328125,
         -91.65929412841797
@@ -2058,7 +2058,7 @@
       "properties": {
         "cnr_id": "comfy-asset-downloader",
         "ver": "cb7151a82f91ab3da819f469945eafe3ac6ec7f8",
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/stabilityai/stable-diffusion-xl-refiner-1.0/resolve/main/sd_xl_refiner_1.0.safetensors",
@@ -2069,7 +2069,7 @@
     },
     {
       "id": 240,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -27.651430130004883,
         -273.7962646484375
@@ -2086,7 +2086,7 @@
       "properties": {
         "cnr_id": "comfy-asset-downloader",
         "ver": "cb7151a82f91ab3da819f469945eafe3ac6ec7f8",
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",

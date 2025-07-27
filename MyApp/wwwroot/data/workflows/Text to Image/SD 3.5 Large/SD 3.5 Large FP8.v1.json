@@ -259,7 +259,7 @@
         "Node name for S&R": "CLIPTextEncode"
       },
       "widgets_values": [
-        "low quality, blurry, noisy, compression artifacts"
+        "low quality, blurry, noisy, compression artifacts, text, letters, writing, typography, words, typography, signature, watermark, logo, label"
       ],
       "color": "#322",
       "bgcolor": "#533"
@@ -324,8 +324,8 @@
         "Node name for S&R": "EmptySD3LatentImage"
       },
       "widgets_values": [
-        1024,
-        1024,
+        768,
+        1344,
         1
       ]
     },
@@ -596,7 +596,7 @@
     },
     {
       "id": 54,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -232.17430114746094,
         714.2232055664062
@@ -649,7 +649,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_large_fp8_scaled.safetensors",
@@ -660,7 +660,7 @@
     },
     {
       "id": 56,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         81.23357391357422,
         905.1696166992188
@@ -713,7 +713,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_g.safetensors",
@@ -724,7 +724,7 @@
     },
     {
       "id": 58,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -232.17430114746094,
         905.1696166992188
@@ -777,7 +777,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/blob/main/text_encoders/clip_l.safetensors",
@@ -788,7 +788,7 @@
     },
     {
       "id": 55,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         81.23357391357422,
         712.4465942382812
@@ -841,7 +841,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/t5xxl_fp8_e4m3fn.safetensors",

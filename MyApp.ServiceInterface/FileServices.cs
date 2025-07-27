@@ -8,6 +8,16 @@ namespace MyApp.ServiceInterface;
 
 public class FileServices(ILogger<FileServices> log, AppData appData, AppConfig appConfig) : Service
 {
+    public object Any(DownloadFile request)
+    {
+        var filePath = appConfig.FilesPath.CombineWith(request.Path[..2], request.Path);
+        if (!File.Exists(filePath))
+            throw HttpError.NotFound("File not found");
+
+        return new HttpResult(new FileInfo(filePath),
+            asAttachment:request.Download == true);
+    }
+
     public object Any(GetArtifact request)
     {
         var filePath = appConfig.ArtifactsPath.CombineWith(request.Path[..2], request.Path);

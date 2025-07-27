@@ -62,7 +62,7 @@
         "secondTabWidth": 65
       },
       "widgets_values": [
-        "low quality, blurry, noisy, compression artifacts"
+        "low quality, blurry, noisy, compression artifacts, text, letters, writing, typography, words, typography, signature, watermark, logo, label"
       ],
       "color": "#322",
       "bgcolor": "#533"
@@ -126,7 +126,7 @@
     },
     {
       "id": 85,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         127.98540496826172,
         756.3136596679688
@@ -179,7 +179,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/llama_3.1_8b_instruct_fp8_scaled.safetensors",
@@ -362,8 +362,8 @@
         "secondTabWidth": 65
       },
       "widgets_values": [
-        1024,
-        1024,
+        768,
+        1344,
         1
       ]
     },
@@ -672,7 +672,7 @@
     },
     {
       "id": 84,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         438.8063659667969,
         570.2034912109375
@@ -725,7 +725,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/t5xxl_fp8_e4m3fn.safetensors",
@@ -736,7 +736,7 @@
     },
     {
       "id": 83,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         127.98540496826172,
         570.2034912109375
@@ -789,7 +789,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/clip_g_hidream.safetensors",
@@ -800,7 +800,7 @@
     },
     {
       "id": 82,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         438.8063659667969,
         385.03289794921875
@@ -853,7 +853,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/text_encoders/clip_l_hidream.safetensors",
@@ -864,7 +864,7 @@
     },
     {
       "id": 81,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         127.98540496826172,
         385.03289794921875
@@ -917,7 +917,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_fast_fp8.safetensors",
@@ -928,7 +928,7 @@
     },
     {
       "id": 86,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         438.8063659667969,
         756.3136596679688
@@ -983,7 +983,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/vae/ae.safetensors",

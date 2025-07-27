@@ -70,8 +70,10 @@ public partial class AppHost() : AppHostBase("MyApp"), IHostingStartup
             scripts.ScriptAssemblies.Add(typeof(Hello).Assembly);
             scripts.ScriptMethods.Add(new ValidationScripts());
 
+            services.AddSingleton<IComfyWorkflowConverter, CSharpPromptComfyWorkflowConverter>();
+            services.AddSingleton<NodeComfyWorkflowConverter>();
             // services.AddSingleton<IComfyWorkflowConverter, CSharpComfyWorkflowConverter>();
-            services.AddSingleton<IComfyWorkflowConverter, NodeComfyWorkflowConverter>();
+            // services.AddSingleton<IComfyWorkflowConverter, NodeComfyWorkflowConverter>();
         })
         .ConfigureAppHost(afterConfigure: appHost =>
         {
@@ -81,7 +83,7 @@ public partial class AppHost() : AppHostBase("MyApp"), IHostingStartup
             using var db = services.GetRequiredService<IDbConnectionFactory>().Open(x => x.WithName("AppHost"));
             appData.Reload(db);
             var agentsManager = services.GetRequiredService<AgentEventsManager>();
-            agentsManager.Reload();
+            agentsManager.Reload(db);
         });
 
     public override void Configure()

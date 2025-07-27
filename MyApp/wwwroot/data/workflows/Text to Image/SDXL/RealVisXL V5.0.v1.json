@@ -64,8 +64,8 @@
         "Node name for S&R": "EmptyLatentImage"
       },
       "widgets_values": [
-        1024,
-        1024,
+        768,
+        1344,
         1
       ]
     },
@@ -412,7 +412,7 @@
         "Node name for S&R": "CLIPTextEncode"
       },
       "widgets_values": [
-        "low quality, blurry, noisy, compression artifacts"
+        "low quality, blurry, noisy, compression artifacts, text, letters, writing, typography, words, typography, signature, watermark, logo, label"
       ],
       "color": "#322",
       "bgcolor": "#533"
@@ -481,7 +481,7 @@
     },
     {
       "id": 12,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         33.905029296875,
         585.1615600585938
@@ -534,7 +534,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors",
@@ -545,7 +545,7 @@
     },
     {
       "id": 13,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         33.905029296875,
         399.73931884765625
@@ -598,7 +598,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://civitai.com/api/download/models/1031794?type=Model&format=SafeTensor&size=pruned&fp=fp16",

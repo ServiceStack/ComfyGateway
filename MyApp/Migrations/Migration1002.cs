@@ -33,6 +33,7 @@ public class Migration1002 : MigrationBase
         public string Version { get; set; } // v1
         [Unique]
         public string Path { get; set; }    // Category/Base/Name.Version.json
+        [PgSqlJsonB]
         public Dictionary<string,object?> Workflow { get; set; }
         public ComfyWorkflowInfo Info { get; set; }
         [IgnoreDataMember]
@@ -40,7 +41,6 @@ public class Migration1002 : MigrationBase
         public Dictionary<string, ApiNode>? ApiPrompt { get; set; }
         public List<string> Nodes { get; set; }
         public List<string> Assets { get; set; }
-    
         public string PosterImage { get; set; }
 
         /// <summary>
@@ -87,6 +87,7 @@ public class Migration1002 : MigrationBase
         public Dictionary<string,object?>? Args { get; set; }
         public Dictionary<string,object?> Workflow { get; set; }
         public ApiPrompt ApiPrompt { get; set; }
+        public List<string>? Inputs { get; set; }
         public HashSet<string> RequiredNodes { get; set; }
         public HashSet<string> RequiredAssets { get; set; }
         public string? DeviceId { get; set; }
@@ -147,6 +148,8 @@ public class Migration1002 : MigrationBase
         public string? PublishedBy { get; set; }
         [Index]
         public DateTime? PublishedDate { get; set; }
+        public int? VariantId { get; set; }
+        public string? VariantName { get; set; }
     }
     
     public enum AssetType {}

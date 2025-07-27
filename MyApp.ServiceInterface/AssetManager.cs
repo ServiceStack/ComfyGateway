@@ -65,8 +65,6 @@ public class AssetManager
 
             // Move the temporary file to the final location
             // If a file with the same hash already exists, File.Move will throw an IOException.
-            // You might want to check File.Exists(finalFilePath) first and decide on a policy
-            // (e.g., skip saving, overwrite, or return existing file's name).
             if (File.Exists(finalFilePath))
             {
                 // File with this hash already exists. Delete temp file and return existing name.

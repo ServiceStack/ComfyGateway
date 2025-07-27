@@ -110,8 +110,8 @@
         "Node name for S&R": "EmptyLatentImage"
       },
       "widgets_values": [
-        1024,
-        1024,
+        768,
+        1344,
         1
       ]
     },
@@ -283,7 +283,7 @@
         "Node name for S&R": "CLIPTextEncode"
       },
       "widgets_values": [
-        "low quality, blurry, noisy, compression artifacts"
+        "low quality, blurry, noisy, compression artifacts, text, letters, writing, typography, words, typography, signature, watermark, logo, label"
       ]
     },
     {
@@ -351,7 +351,7 @@
     },
     {
       "id": 18,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         2.9957075119018555,
         455.2945251464844
@@ -404,7 +404,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/ByteDance/SDXL-Lightning/resolve/main/sdxl_lightning_4step.safetensors",

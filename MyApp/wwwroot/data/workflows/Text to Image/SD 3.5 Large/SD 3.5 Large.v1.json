@@ -423,7 +423,7 @@
     },
     {
       "id": 301,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -1159.731689453125,
         -98.36491394042969
@@ -476,7 +476,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_g.safetensors",
@@ -487,7 +487,7 @@
     },
     {
       "id": 302,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -1473.137939453125,
         -98.36491394042969
@@ -540,7 +540,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/blob/main/text_encoders/clip_l.safetensors",
@@ -551,7 +551,7 @@
     },
     {
       "id": 303,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -1159.731689453125,
         -291.0876159667969
@@ -604,7 +604,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/t5xxl_fp16.safetensors",
@@ -766,8 +766,8 @@
         "Node name for S&R": "EmptySD3LatentImage"
       },
       "widgets_values": [
-        1024,
-        1024,
+        768,
+        1344,
         1
       ]
     },
@@ -899,7 +899,7 @@
     },
     {
       "id": 304,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -1473.137939453125,
         -289.3110046386719
@@ -952,7 +952,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/sd3.5_large.safetensors",
@@ -1010,7 +1010,7 @@
         "Node name for S&R": "CLIPTextEncode"
       },
       "widgets_values": [
-        "low quality, blurry, noisy, compression artifacts"
+        "low quality, blurry, noisy, compression artifacts, text, letters, writing, typography, words, typography, signature, watermark, logo, label"
       ],
       "color": "#322",
       "bgcolor": "#533"

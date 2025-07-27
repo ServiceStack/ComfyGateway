@@ -132,6 +132,7 @@ public enum ComfyInputType
     WavBytes,
     WavBytesBatch,
     Webcam,
+    Video,
 }
 
 public class ComfyInputDefinition
@@ -151,6 +152,7 @@ public class ComfyInputDefinition
     public bool? Multiline { get; set; }
     public bool? DynamicPrompts { get; set; }
     public bool? ControlAfterGenerate { get; set; }
+    public bool? Upload { get; set; }
     public string[]? EnumValues { get; set; }
     public Dictionary<string, object>? ComboValues { get; set; }
 }
@@ -182,6 +184,7 @@ public class WorkflowVersion : AuditBase
     public string Version { get; set; } // v1
     [Unique]
     public string Path { get; set; }    // Category/Base/Name.Version.json
+    [PgSqlJsonB]
     public Dictionary<string,object?> Workflow { get; set; }
     public WorkflowInfo Info { get; set; }
     [IgnoreDataMember]
@@ -212,6 +215,9 @@ public class ParsedWorkflow
     public string Path => $"{Category}/{BaseModel}/{Info.Name}.{Version}.json";
     public List<string> Nodes { get; set; }
     public List<string> Assets { get; set; }
+    public List<string> RequiresAssets { get; set; }
+    public List<string> RequiresCustomNodes { get; set; }
+    public List<string> RequiresPipPackages { get; set; }
     public WorkflowInfo Info { get; set; }
     public Dictionary<string,object?> Workflow { get; set; }
 }
@@ -228,6 +234,8 @@ public class WorkflowInfo
     public ComfyPrimarySource Output { get; set; }
     public List<ComfyInputDefinition> Inputs { get; set; } = [];
     public List<AssetInfo> Assets { get; set; } = [];
+    public List<string> CustomNodes { get; set; } = [];
+    public List<string> PipPackages { get; set; } = [];
 }
 
 public class AssetInfo
@@ -330,6 +338,7 @@ public class WorkflowGeneration : AuditBase
     public Dictionary<string,object?> Workflow { get; set; }
     [IgnoreDataMember]
     public ApiPrompt ApiPrompt { get; set; }
+    public List<string>? Inputs { get; set; }
     public HashSet<string> RequiredNodes { get; set; }
     public HashSet<string> RequiredAssets { get; set; }
     public string? DeviceId { get; set; }
@@ -377,6 +386,8 @@ public class Artifact : AuditBase
     public string? Hash { get; set; }
     public int? Width { get; set; }
     public int? Height { get; set; }
+    [CustomSelect("\"Width\" * \"Height\"")]
+    public int? Resolution { get; set; }
     public int? VersionId { get; set; }
     public int? WorkflowId { get; set; }
     public int? ThreadId { get; set; }
@@ -409,6 +420,10 @@ public class Artifact : AuditBase
     public string? PublishedBy { get; set; }
     [Index]
     public DateTime? PublishedDate { get; set; }
+    
+    public int? VariantId { get; set; }
+    
+    public string? VariantName { get; set; }
 }
 
 public class WorkflowResult

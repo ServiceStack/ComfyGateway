@@ -20,6 +20,23 @@ public class QueryArtifacts : QueryDb<Artifact>
 }
 
 [Tag(Tags.Artifacts)]
+public class GetArtifactVariants : IGet, IReturn<QueryResponse<Artifact>>
+{
+    public string? GenerationId { get; set; }
+    [Input(Type = "tag"), FieldCss(Field = "col-span-12")]
+    public List<int>? ArtifactIds { get; set; }
+}
+
+[Tag(Tags.Artifacts)]
+[Route("/files/{**Path}")]
+public class DownloadFile : IGet, IReturn<byte[]>
+{
+    [ValidateNotEmpty]
+    public string Path { get; set; } = null!;
+    public bool? Download { get; set; }
+}
+
+[Tag(Tags.Artifacts)]
 [Route("/artifacts/{**Path}")]
 public class GetArtifact : IGet, IReturn<byte[]>
 {

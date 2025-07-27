@@ -40,7 +40,6 @@ public class ComfyAgentTests
             "https://github.com/ltdrdata/ComfyUI-Manager", 
             "https://github.com/pythongosssss/ComfyUI-Custom-Scripts",
             "https://github.com/MoonHugo/ComfyUI-FFmpeg",
-            "https://github.com/ServiceStack/comfy-asset-downloader",
         ];
         db.UpdateOnly(() => new ComfyAgent {
             RequireNodes = agent.RequireNodes,

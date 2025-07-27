@@ -25,6 +25,16 @@ public class GetAppDataResponse
 
 [Tag(Tags.Admin)]
 [ValidateIsAdmin]
+public class HardDeleteWorkflow : IDeleteDb<Workflow>, IReturn<StringResponse>
+{
+    [ValidateGreaterThan(0)]
+    [Input(Type="lookup", Options = "{refId:'id',model:'Workflow',refLabel:'Name'}")]
+    public int Id { get; set; }
+    public bool Force { get; set; }
+}
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
 public class HardDeleteGenerations : IPost, IReturn<HardDeleteGenerationsResponse>
 {
     public int Limit { get; set; }
@@ -191,7 +201,7 @@ public class GenerateCaptionArtifact : IPost, IReturn<StringsResponse>
 
 [Tag(Tags.Admin)]
 [ValidateIsAdmin]
-public class ReloadAiTasks : IPost, IReturn<StringResponse>
+public class ReloadAgentEvents : IPost, IReturn<StringResponse>
 {
 }
 
@@ -280,4 +290,15 @@ public class UpdateWorkflowVersionResponse
 public class ParseWorkflowVersions : IPost, IReturn<StringsResponse>
 {
     public int? VersionId { get; set; }
+}
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class ResizeImages : IPost, IReturn<StringsResponse>
+{
+    public string? Id { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    
+    public int? Limit { get; set; }
 }

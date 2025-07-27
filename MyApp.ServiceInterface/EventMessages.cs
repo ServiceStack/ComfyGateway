@@ -1,4 +1,5 @@
 using MyApp.ServiceModel;
+using ServiceStack;
 
 namespace MyApp.ServiceInterface;
 
@@ -15,12 +16,17 @@ public static class EventMessages
     
     public static AgentEvent ToExecWorkflow(this WorkflowGeneration generation)
     {
-        return new AgentEvent
+        var ret = new AgentEvent
         {
             Name = ExecWorkflow,
             Args = new() {
                 ["url"] = Routes.GetGenerationApiPrompt(generation.Id),
             }
         };
+        if (generation.Inputs?.Count > 0)
+        {
+            ret.Args["inputs"] = string.Join(',', generation.Inputs.Select(x => "/files".CombineWith(x)));
+        }
+        return ret;
     }
 }

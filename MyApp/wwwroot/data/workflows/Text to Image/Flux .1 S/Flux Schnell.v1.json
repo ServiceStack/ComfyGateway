@@ -354,7 +354,7 @@
     },
     {
       "id": 32,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -186.97686767578125,
         520.3899536132812
@@ -407,7 +407,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/flux1-schnell.safetensors",
@@ -497,7 +497,7 @@
     },
     {
       "id": 34,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         123.93860626220703,
         518.6133422851562
@@ -550,7 +550,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/t5xxl_fp8_e4m3fn.safetensors",
@@ -561,7 +561,7 @@
     },
     {
       "id": 35,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         126.43118286132812,
         707.412353515625
@@ -614,7 +614,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/blob/main/text_encoders/clip_l.safetensors",
@@ -625,7 +625,7 @@
     },
     {
       "id": 33,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -186.97686767578125,
         707.412353515625
@@ -678,7 +678,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/vae/ae.safetensors",
@@ -748,8 +748,8 @@
         "Node name for S&R": "EmptyLatentImage"
       },
       "widgets_values": [
-        1024,
-        1024,
+        768,
+        1344,
         1
       ]
     },

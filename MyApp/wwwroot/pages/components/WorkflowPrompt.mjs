@@ -27,7 +27,7 @@ export default {
             </div>
         </div>
     </div>
-    <div v-else>
+    <form ref="refForm" @submit.prevent="runWorkflow" v-else>
         <!-- Text prompt input -->
         <div class="w-full md:flex-grow">
             <textarea
@@ -50,7 +50,7 @@ export default {
                         <button type="button"
                             @click="setArgs({ width:1024, height:1024 })"
                             :class="['px-4 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 rounded-l-lg',
-                                workflowArgs.width == workflowArgs.height
+                                Number(workflowArgs.width) === Number(workflowArgs.height)
                                     ? 'bg-indigo-500 text-white hover:bg-indigo-600 border-indigo-600'
                                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                             ]">
@@ -143,8 +143,14 @@ export default {
                         </div>
                     </div>
                 </div>
-                <div v-if="hasInput('image')" class="mt-4">
-                    <FileUpload ref="refImage" id="image" v-model="workflowArgs.image" required
+                <div v-if="hasInput('image')">
+                    <div v-if="workflowArgs.image" 
+                         class="flex justify-center border-gray-300 dark:border-gray-600 border-dashed relative flex flex-col items-center justify-center w-full h-64 border-2 rounded-lg bg-gray-50 dark:bg-gray-700">
+                      <img :src="'/artifacts/' + workflowArgs.image" alt=""
+                           class="size-48 aspect-square object-cover rounded-full">
+                      <input type="hidden" :value="workflowArgs.image">
+                    </div>
+                    <FileUpload v-else ref="refImage" id="image" v-model="workflowArgs.image" required
                         accept=".webp,.jpg,.jpeg,.png,.gif" :acceptLabel="acceptedImages" @change="renderKey++">
                         <template #title>
                             <span class="font-semibold text-green-600">Click to upload</span> or drag and drop
@@ -235,7 +241,7 @@ export default {
                 </div>
             </div>
         </div>
-    </div>
+    </form>
     <slot name="bottom"></slot>
 </div>
     `,
@@ -245,9 +251,10 @@ export default {
         workflowArgs: Object,
     },
     emits:['run'],
-    setup(props, { emit }) {
+    setup(props, { emit, expose }) {
         
         const renderKey = ref(0)
+        const refForm = ref()
         const refImage = ref()
         const refAudio = ref()
         const refVideo = ref()
@@ -256,6 +263,8 @@ export default {
             width: 1024,
             height: 1024,
         })
+
+        expose({ refForm })
 
         const advancedInputs = computed(() => {
             return props.selectedWorkflowInfo?.inputs?.filter(x =>
@@ -274,7 +283,7 @@ export default {
             return true
         }
 
-        function runWorkflow() {
+        function runWorkflow(e) {
             if (props.selectedWorkflow && props.workflowArgs.positivePrompt) {
                 emit('run', props.selectedWorkflow)
             }
@@ -289,8 +298,8 @@ export default {
         }
         
         function resetPositivePrompt() {
-            props.workflowArgs.positivePrompt = props.selectedWorkflowInfo.inputs.find(x => x.name === 'positivePrompt').default
-            props.workflowArgs.negativePrompt = props.selectedWorkflowInfo.inputs.find(x => x.name === 'negativePrompt').default
+            props.workflowArgs.positivePrompt = props.selectedWorkflowInfo.inputs.find(x => x.name === 'positivePrompt')?.default ?? ''
+            props.workflowArgs.negativePrompt = props.selectedWorkflowInfo.inputs.find(x => x.name === 'negativePrompt')?.default ?? ''
             props.workflowArgs.width = props.selectedWorkflowInfo.inputs.find(x => x.name === 'width')?.default ?? 1024
             props.workflowArgs.height = props.selectedWorkflowInfo.inputs.find(x => x.name === 'height')?.default ?? 1024
             props.workflowArgs.batch_size = props.selectedWorkflowInfo.inputs.find(x => x.name === 'batch_size')?.default ?? 1
@@ -324,6 +333,7 @@ export default {
         return {
             renderKey,
             prefs,
+            refForm,
             refImage,
             refAudio,
             refVideo,

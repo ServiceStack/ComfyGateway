@@ -5,12 +5,41 @@ using ServiceStack;
 using ServiceStack.Data;
 using ServiceStack.OrmLite;
 using ServiceStack.Text;
+using SkiaSharp;
 
 namespace MyApp.ServiceInterface;
 
 public class AdminServices(ILogger<AdminServices> log, 
     AppData appData, AppConfig appConfig, AgentEventsManager agentEvents, IDbConnectionFactory dbFactory) : Service
 {
+    public object Delete(HardDeleteWorkflow request)
+    {
+        var force = request.Force;
+        var ret = new StringsResponse();
+        var workflow = Db.SingleById<Workflow>(request.Id);
+        if (workflow == null)
+            throw HttpError.NotFound("Workflow not found");
+
+        var workflowVersions = Db.Select<WorkflowVersion>(x => x.ParentId == request.Id);
+        foreach (var workflowVersion in workflowVersions)
+        {
+            ret.Results.Add($"Deleted WorkflowVersion {workflowVersion.Id} {workflowVersion.Name}");
+            if (force) Db.DeleteById<WorkflowVersion>(workflowVersion.Id);
+        }
+        
+        var workflowGenerations = Db.Select<WorkflowGeneration>(x => x.WorkflowId == request.Id);
+        foreach (var workflowGeneration in workflowGenerations)
+        {
+            ret.Results.Add($"Deleted WorkflowGeneration {workflowGeneration.Id}");
+            if (force) Db.DeleteById<WorkflowGeneration>(workflowGeneration.Id);
+        }
+        
+        ret.Results.Add($"Deleted Workflow {workflow.Id} {workflow.Name}");
+        if (force) Db.DeleteById<Workflow>(request.Id);
+
+        return ret;
+    }
+    
     public object Post(HardDeleteGenerations request)
     {
         var generationsToDelete = Db.Select(Db.From<WorkflowGeneration>()
@@ -86,6 +115,8 @@ public class AdminServices(ILogger<AdminServices> log,
         var artifacts = Db.Select(Db.From<Artifact>()
             .Where(x => x.GenerationId == request.Id));
 
+        agentEvents.RemoveGeneration(generationId);
+
         if (artifacts.Count == 0)
         {
             log.LogInformation("Deleting generation {Id} with no associated artifacts", generationId);
@@ -101,6 +132,7 @@ public class AdminServices(ILogger<AdminServices> log,
         
         Db.DeleteById<WorkflowGeneration>(generationId);
         Db.Insert(new DeletedRow { Table = Table.WorkflowGeneration, Key = generationId });
+
         ret.Result = $"Deleted {generationId}, {artifacts.Count} artifacts and {artifactPaths.Count} associated files";
 
         return ret;
@@ -556,12 +588,12 @@ public class AdminServices(ILogger<AdminServices> log,
         return ret;
     }
 
-    public object Any(ReloadAiTasks request)
+    public object Any(ReloadAgentEvents request)
     {
-        agentEvents.Reload();
+        agentEvents.Reload(Db);
         return new StringResponse
         {
-            Result = $"Loaded {agentEvents.AiTasks.Count} pending tasks"
+            Result = $"Reloaded {agentEvents.QueuedGenerations.Count} pending generations, {agentEvents.AiTasks.Count} pending tasks"
         };
     }
 
@@ -721,5 +753,134 @@ public class AdminServices(ILogger<AdminServices> log,
             Result = task.Result ?? "",
             Response = request.IncludeDetails == true ? task.Response : null,
         };
+    }
+
+    public object Any(ResizeImages request)
+    {
+        // Resize to 768x1344 maintaining aspect ratio
+        var targetWidth = request.Width ?? 768;
+        var targetHeight = request.Height ?? 1344;
+        var userId = Request.GetRequiredUserId();
+
+        var ret = new StringsResponse();
+        
+        if (request.Id != null)
+        {
+            var generations = Db.Select<WorkflowGeneration>(x => x.Id == request.Id);
+            ResizeGeneration(generations);
+        }
+        else
+        {
+            var generations = Db.Select(Db.From<WorkflowGeneration>()
+                .Join<Artifact>((g,a) => g.Id == a.GenerationId)
+                .Where<Artifact>(a => a.Width == 920)
+                .OrderByDescending(x => x.CreatedDate)
+                .Take(request.Limit ?? 1));
+            ResizeGeneration(generations);
+        }
+
+        return ret;
+
+        void ResizeGeneration(List<WorkflowGeneration> generations)
+        {
+            foreach (var generation in generations)
+            {
+                var artifacts = Db.Select(Db.From<Artifact>().Where(x => x.GenerationId == generation.Id));
+                foreach (var artifact in artifacts)
+                {
+                    // Use SKIA to crop image to 768x1344
+                    var fileName = artifact.Url.LastRightPart('/');
+                    var artifactPath = appData.GetArtifactPath(fileName);
+                    
+                    if (!File.Exists(artifactPath))
+                    {
+                        ret.Results.Add($"File not found: {fileName}");
+                        continue;
+                    }
+
+                    if (artifact.Width == targetWidth && artifact.Height == targetHeight)
+                    {
+                        ret.Results.Add($"Already resized: {fileName}");
+                        continue;
+                    }
+                    
+                    try
+                    {
+                        using var stream = File.OpenRead(artifactPath);
+                        using var originalBitmap = SKBitmap.Decode(stream);
+                        
+                        if (originalBitmap == null)
+                        {
+                            ret.Results.Add($"Failed to decode: {fileName}");
+                            continue;
+                        }
+
+                        var sourceWidth = originalBitmap.Width;
+                        var sourceHeight = originalBitmap.Height;
+
+                        // Calculate the scale factor to fill the target size (crop mode)
+                        var scale = Math.Max((float)targetWidth / sourceWidth, (float)targetHeight / sourceHeight);
+                        var scaledWidth = (int)(sourceWidth * scale);
+                        var scaledHeight = (int)(sourceHeight * scale);
+
+                        // Calculate crop position to center the image
+                        var cropX = (scaledWidth - targetWidth) / 2;
+                        var cropY = (scaledHeight - targetHeight) / 2;
+
+                        // Create the output bitmap
+                        using var outputBitmap = new SKBitmap(targetWidth, targetHeight);
+                        using var canvas = new SKCanvas(outputBitmap);
+                        using var paint = new SKPaint { IsAntialias = true };
+
+                        // Clear the canvas
+                        canvas.Clear(SKColors.Transparent);
+
+                        // Calculate source and destination rectangles for center crop
+                        var sourceRect = new SKRect(0, 0, sourceWidth, sourceHeight);
+                        var destRect = new SKRect(-cropX, -cropY, scaledWidth - cropX, scaledHeight - cropY);
+
+                        // Draw the scaled and cropped image
+                        canvas.DrawBitmap(originalBitmap, sourceRect, destRect, paint);
+
+                        using var image = SKImage.FromBitmap(outputBitmap);
+                        using var data = image.Encode(SKEncodedImageFormat.Webp, 90);
+                        
+                        // Save cropped image
+                        using var outputStream = File.Create(artifactPath);
+                        data.SaveTo(outputStream);
+                        
+                        // Update artifact dimensions in database
+                        Db.UpdateOnly(() => new Artifact {
+                            Width = targetWidth,
+                            Height = targetHeight,
+                            ModifiedDate = DateTime.UtcNow,
+                            ModifiedBy = userId,
+                        }, where: x => x.Id == artifact.Id);
+                        
+                        ret.Results.Add($"{generation.Id[..4]} {fileName} {targetWidth}x{targetHeight} (cropped from {sourceWidth}x{sourceHeight})");
+                    }
+                    catch (Exception e)
+                    {
+                        log.LogError(e, "Failed to resize artifact {Path}", artifactPath);
+                        ret.Results.Add($"Error resizing {fileName}: {e.Message}");
+                    }
+                }
+
+                foreach (var asset in generation.Result?.Assets ?? [])
+                {
+                    if (asset.Type == AssetType.Image)
+                    {
+                        asset.Width = targetWidth;
+                        asset.Height = targetHeight;
+                    }
+                }
+                
+                Db.UpdateOnly(() => new WorkflowGeneration {
+                    Result = generation.Result,
+                    ModifiedDate = DateTime.UtcNow,
+                    ModifiedBy = userId,
+                }, where: x => x.Id == generation.Id);
+            }
+        }
     }
 }

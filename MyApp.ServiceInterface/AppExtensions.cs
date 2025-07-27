@@ -1,7 +1,7 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Net;
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 using MyApp.ServiceModel;
 using ServiceStack;
 using ServiceStack.OrmLite;
@@ -35,6 +35,15 @@ public static partial class AppExtensions
         {
             // Path contains invalid characters or is in an invalid format
             return false;
+        }
+    }
+
+    public static IEnumerable<TElement> ValuesWithoutLock<TKey, TElement>(this ConcurrentDictionary<TKey, TElement> source) where TKey : notnull
+    {
+        foreach (var item in source)
+        {
+            if (item.Value != null)
+                yield return item.Value;
         }
     }
 
@@ -152,7 +161,9 @@ public static partial class AppExtensions
     {
         var gen = db.SingleById<WorkflowGeneration>(generationId);
         if (gen == null)
+        {
             throw HttpError.NotFound("Generation not found");
+        }
         return gen;
     }
 

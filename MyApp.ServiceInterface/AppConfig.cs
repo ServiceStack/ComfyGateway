@@ -11,7 +11,7 @@ public class AppConfig
     public string PublicBaseUrl { get; set; } = "https://my-app.org";
     public string AppDataPath { get; set; } = "App_Data";
     public string ArtifactsPath { get; set; } = "App_Data/artifacts";
-    public string? FilesPath { get; set; } = "App_Data/files";
+    public string FilesPath { get; set; } = "App_Data/files";
     public string AssetsBaseUrl { get; set; } = "https://localhost:5001";
     public string VisualLanguageModel { get; set; } = "qwen2.5vl:7b";
     public string ChatLanguageModel { get; set; }

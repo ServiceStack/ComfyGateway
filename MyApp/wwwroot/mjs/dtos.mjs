@@ -1,5 +1,5 @@
 /* Options:
-Date: 2025-07-01 11:28:29
+Date: 2025-07-27 17:53:19
 Version: 8.81
 Tip: To override a DTO option, remove "//" prefix before updating
 BaseUrl: https://localhost:5001
@@ -28,6 +28,28 @@ export class AuditBase {
     deletedDate;
     /** @type {?string} */
     deletedBy;
+}
+export class Workflow extends AuditBase {
+    /** @param {{id?:number,category?:string,base?:string,name?:string,slug?:string,description?:string,pinVersionId?:number,threadId?:number,tags?:string[],createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    constructor(init) { super(init); Object.assign(this, init) }
+    /** @type {number} */
+    id;
+    /** @type {string} */
+    category;
+    /** @type {string} */
+    base;
+    /** @type {string} */
+    name;
+    /** @type {string} */
+    slug;
+    /** @type {string} */
+    description;
+    /** @type {?number} */
+    pinVersionId;
+    /** @type {?number} */
+    threadId;
+    /** @type {?string[]} */
+    tags;
 }
 /** @typedef {'Image'|'Video'|'Audio'|'Animation'|'Text'|'Binary'} */
 export var AssetType;
@@ -150,7 +172,7 @@ export class ResponseStatus {
     meta;
 }
 export class WorkflowGeneration extends AuditBase {
-    /** @param {{id?:string,userId?:string,threadId?:number,workflowId?:number,versionId?:number,output?:AssetType,description?:string,checkpoint?:string,lora?:string,embedding?:string,vae?:string,controlNet?:string,upscaler?:string,posterImage?:string,args?:{ [index:string]: Object; },requiredNodes?:string[],requiredAssets?:string[],deviceId?:string,promptId?:string,result?:WorkflowResult,error?:ResponseStatus,credits?:number,statusUpdate?:string,publishedBy?:string,publishedDate?:string,publicThreadId?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:string,userId?:string,threadId?:number,workflowId?:number,versionId?:number,output?:AssetType,description?:string,checkpoint?:string,lora?:string,embedding?:string,vae?:string,controlNet?:string,upscaler?:string,posterImage?:string,args?:{ [index:string]: Object; },inputs?:string[],requiredNodes?:string[],requiredAssets?:string[],deviceId?:string,promptId?:string,result?:WorkflowResult,error?:ResponseStatus,credits?:number,statusUpdate?:string,publishedBy?:string,publishedDate?:string,publicThreadId?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {string} */
     id;
@@ -182,6 +204,8 @@ export class WorkflowGeneration extends AuditBase {
     posterImage;
     /** @type {?{ [index:string]: Object; }} */
     args;
+    /** @type {?string[]} */
+    inputs;
     /** @type {string[]} */
     requiredNodes = [];
     /** @type {string[]} */
@@ -667,30 +691,6 @@ export class Booking extends AuditBase {
     /** @type {User} */
     employee;
 }
-export class Workflow extends AuditBase {
-    /** @param {{id?:number,category?:string,base?:string,name?:string,slug?:string,path?:string,description?:string,pinVersionId?:number,threadId?:number,tags?:string[],createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
-    constructor(init) { super(init); Object.assign(this, init) }
-    /** @type {number} */
-    id;
-    /** @type {string} */
-    category;
-    /** @type {string} */
-    base;
-    /** @type {string} */
-    name;
-    /** @type {string} */
-    slug;
-    /** @type {string} */
-    path;
-    /** @type {string} */
-    description;
-    /** @type {?number} */
-    pinVersionId;
-    /** @type {?number} */
-    threadId;
-    /** @type {?string[]} */
-    tags;
-}
 /** @typedef {'TextToImage'|'ImageToImage'|'ImageToText'|'TextToAudio'|'TextToVideo'|'TextTo3D'|'AudioToText'|'VideoToText'|'ImageToVideo'} */
 export var ComfyWorkflowType;
 (function (ComfyWorkflowType) {
@@ -712,7 +712,7 @@ export var ComfyPrimarySource;
     ComfyPrimarySource["Video"] = "Video"
     ComfyPrimarySource["Audio"] = "Audio"
 })(ComfyPrimarySource || (ComfyPrimarySource = {}));
-/** @typedef {'Unknown'|'Audio'|'Boolean'|'Clip'|'ClipVision'|'ClipVisionOutput'|'Combo'|'Conditioning'|'ControlNet'|'Enum'|'FasterWhisperModel'|'Filepath'|'Fl2Model'|'Float'|'Floats'|'Gligen'|'Guider'|'Hooks'|'Image'|'Int'|'Latent'|'LatentOperation'|'Load3D'|'Load3DAnimation'|'Mask'|'Mesh'|'Model'|'Noise'|'Photomaker'|'Sampler'|'Sigmas'|'String'|'StyleModel'|'Subtitle'|'TranscriptionPipeline'|'Transcriptions'|'UpscaleModel'|'VAE'|'VHSAudio'|'Voxel'|'WavBytes'|'WavBytesBatch'|'Webcam'} */
+/** @typedef {'Unknown'|'Audio'|'Boolean'|'Clip'|'ClipVision'|'ClipVisionOutput'|'Combo'|'Conditioning'|'ControlNet'|'Enum'|'FasterWhisperModel'|'Filepath'|'Fl2Model'|'Float'|'Floats'|'Gligen'|'Guider'|'Hooks'|'Image'|'Int'|'Latent'|'LatentOperation'|'Load3D'|'Load3DAnimation'|'Mask'|'Mesh'|'Model'|'Noise'|'Photomaker'|'Sampler'|'Sigmas'|'String'|'StyleModel'|'Subtitle'|'TranscriptionPipeline'|'Transcriptions'|'UpscaleModel'|'VAE'|'VHSAudio'|'Voxel'|'WavBytes'|'WavBytesBatch'|'Webcam'|'Video'} */
 export var ComfyInputType;
 (function (ComfyInputType) {
     ComfyInputType["Unknown"] = "Unknown"
@@ -758,9 +758,10 @@ export var ComfyInputType;
     ComfyInputType["WavBytes"] = "WavBytes"
     ComfyInputType["WavBytesBatch"] = "WavBytesBatch"
     ComfyInputType["Webcam"] = "Webcam"
+    ComfyInputType["Video"] = "Video"
 })(ComfyInputType || (ComfyInputType = {}));
 export class ComfyInputDefinition {
-    /** @param {{classType?:string,nodeId?:number,valueIndex?:number,name?:string,label?:string,type?:ComfyInputType,tooltip?:string,default?:Object,min?:number,max?:number,step?:number,round?:number,multiline?:boolean,dynamicPrompts?:boolean,controlAfterGenerate?:boolean,enumValues?:string[],comboValues?:{ [index:string]: Object; }}} [init] */
+    /** @param {{classType?:string,nodeId?:number,valueIndex?:number,name?:string,label?:string,type?:ComfyInputType,tooltip?:string,default?:Object,min?:number,max?:number,step?:number,round?:number,multiline?:boolean,dynamicPrompts?:boolean,controlAfterGenerate?:boolean,upload?:boolean,enumValues?:string[],comboValues?:{ [index:string]: Object; }}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     classType;
@@ -792,6 +793,8 @@ export class ComfyInputDefinition {
     dynamicPrompts;
     /** @type {?boolean} */
     controlAfterGenerate;
+    /** @type {?boolean} */
+    upload;
     /** @type {?string[]} */
     enumValues;
     /** @type {?{ [index:string]: Object; }} */
@@ -806,7 +809,7 @@ export class AssetInfo {
     url;
 }
 export class WorkflowInfo {
-    /** @param {{id?:number,parentId?:number,name?:string,type?:ComfyWorkflowType,input?:ComfyPrimarySource,output?:ComfyPrimarySource,inputs?:ComfyInputDefinition[],assets?:AssetInfo[]}} [init] */
+    /** @param {{id?:number,parentId?:number,name?:string,type?:ComfyWorkflowType,input?:ComfyPrimarySource,output?:ComfyPrimarySource,inputs?:ComfyInputDefinition[],assets?:AssetInfo[],customNodes?:string[],pipPackages?:string[]}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -824,18 +827,24 @@ export class WorkflowInfo {
     inputs = [];
     /** @type {AssetInfo[]} */
     assets = [];
+    /** @type {string[]} */
+    customNodes = [];
+    /** @type {string[]} */
+    pipPackages = [];
 }
 export class WorkflowVersion extends AuditBase {
-    /** @param {{id?:number,parentId?:number,version?:string,name?:string,workflow?:{ [index:string]: Object; },info?:WorkflowInfo,nodes?:string[],assets?:string[],posterImage?:string,reactions?:{ [index:string]: number; },reactionsCount?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,parentId?:number,name?:string,version?:string,path?:string,workflow?:{ [index:string]: Object; },info?:WorkflowInfo,nodes?:string[],assets?:string[],posterImage?:string,reactions?:{ [index:string]: number; },reactionsCount?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
     /** @type {number} */
     parentId;
     /** @type {string} */
+    name;
+    /** @type {string} */
     version;
     /** @type {string} */
-    name;
+    path;
     /** @type {{ [index:string]: Object; }} */
     workflow = {};
     /** @type {WorkflowInfo} */
@@ -1229,7 +1238,7 @@ export class AiTaskInfo {
     errorCode;
 }
 export class OwnerAgentInfo extends AgentInfo {
-    /** @param {{deviceId?:string,userId?:string,userName?:string,lastIp?:string,status?:string,id?:number,shortId?:string,gpus?:GpuInfo[],nodes?:string[],checkpoints?:string[],clip?:string[],clipVision?:string[],configs?:string[],controlnet?:string[],diffusers?:string[],diffusionModels?:string[],embeddings?:string[],gligen?:string[],hypernetworks?:string[],loras?:string[],photomaker?:string[],styleModels?:string[],upscaleModels?:string[],vae?:string[],vaeApprox?:string[],languageModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number,devicePool?:string}} [init] */
+    /** @param {{deviceId?:string,userId?:string,userName?:string,lastIp?:string,downloading?:string,downloaded?:string,downloadFailed?:string,status?:string,id?:number,shortId?:string,gpus?:GpuInfo[],nodes?:string[],checkpoints?:string[],clip?:string[],clipVision?:string[],configs?:string[],controlnet?:string[],diffusers?:string[],diffusionModels?:string[],embeddings?:string[],gligen?:string[],hypernetworks?:string[],loras?:string[],photomaker?:string[],styleModels?:string[],upscaleModels?:string[],vae?:string[],vaeApprox?:string[],languageModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number,devicePool?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {string} */
     deviceId;
@@ -1239,6 +1248,12 @@ export class OwnerAgentInfo extends AgentInfo {
     userName;
     /** @type {?string} */
     lastIp;
+    /** @type {?string} */
+    downloading;
+    /** @type {?string} */
+    downloaded;
+    /** @type {?string} */
+    downloadFailed;
     /** @type {?string} */
     status;
 }
@@ -1290,13 +1305,13 @@ export class DeletedRow {
     /** @type {string} */
     key;
 }
-export class HardDeleteGenerationsResponse {
-    /** @param {{effect?:string,results?:GenerationRef[],responseStatus?:ResponseStatus}} [init] */
+export class StringsResponse {
+    /** @param {{results?:string[],meta?:{ [index:string]: string; },responseStatus?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
-    /** @type {string} */
-    effect;
-    /** @type {GenerationRef[]} */
+    /** @type {string[]} */
     results = [];
+    /** @type {?{ [index:string]: string; }} */
+    meta;
     /** @type {?ResponseStatus} */
     responseStatus;
 }
@@ -1310,18 +1325,18 @@ export class StringResponse {
     /** @type {?ResponseStatus} */
     responseStatus;
 }
-export class StringsResponse {
-    /** @param {{results?:string[],meta?:{ [index:string]: string; },responseStatus?:ResponseStatus}} [init] */
+export class HardDeleteGenerationsResponse {
+    /** @param {{effect?:string,results?:GenerationRef[],responseStatus?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
-    /** @type {string[]} */
+    /** @type {string} */
+    effect;
+    /** @type {GenerationRef[]} */
     results = [];
-    /** @type {?{ [index:string]: string; }} */
-    meta;
     /** @type {?ResponseStatus} */
     responseStatus;
 }
 export class Artifact extends AuditBase {
-    /** @param {{id?:number,generationId?:string,type?:AssetType,url?:string,length?:number,width?:number,height?:number,versionId?:number,workflowId?:number,threadId?:number,credits?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },reactions?:{ [index:string]: number; },reactionsCount?:number,phash?:string,color?:string,caption?:string,description?:string,publishedBy?:string,publishedDate?:string,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,generationId?:string,type?:AssetType,url?:string,length?:number,width?:number,height?:number,resolution?:number,versionId?:number,workflowId?:number,threadId?:number,credits?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },reactions?:{ [index:string]: number; },reactionsCount?:number,phash?:string,color?:string,caption?:string,description?:string,publishedBy?:string,publishedDate?:string,variantId?:number,variantName?:string,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -1337,6 +1352,8 @@ export class Artifact extends AuditBase {
     width;
     /** @type {?number} */
     height;
+    /** @type {?number} */
+    resolution;
     /** @type {?number} */
     versionId;
     /** @type {?number} */
@@ -1369,6 +1386,10 @@ export class Artifact extends AuditBase {
     publishedBy;
     /** @type {?string} */
     publishedDate;
+    /** @type {?number} */
+    variantId;
+    /** @type {?string} */
+    variantName;
 }
 export class DeleteDuplicateArtifactsResponse {
     /** @param {{urlCounts?:{ [index:string]: number; },deletedArtifacts?:Artifact[],responseStatus?:ResponseStatus}} [init] */
@@ -1593,7 +1614,7 @@ export class OpenAiChat {
     user;
 }
 export class GetAppDataResponse {
-    /** @param {{assetCount?:number,workflowCount?:number,agentEventCounts?:{ [index:string]: number; },agents?:AgentInfo[],queuedAiTasks?:AiTaskInfo[],responseStatus?:ResponseStatus}} [init] */
+    /** @param {{assetCount?:number,workflowCount?:number,agentEventCounts?:{ [index:string]: number; },agents?:AgentInfo[],queuedAiTasks?:AiTaskInfo[],defaultGatewayNodes?:string[],responseStatus?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {number} */
     assetCount;
@@ -1605,6 +1626,8 @@ export class GetAppDataResponse {
     agents = [];
     /** @type {AiTaskInfo[]} */
     queuedAiTasks = [];
+    /** @type {string[]} */
+    defaultGatewayNodes = [];
     /** @type {?ResponseStatus} */
     responseStatus;
 }
@@ -1703,12 +1726,28 @@ export class UpdateWorkflowVersionResponse {
     responseStatus;
 }
 export class ParsedWorkflow {
-    /** @param {{nodes?:string[],assets?:string[],info?:WorkflowInfo,workflow?:{ [index:string]: Object; }}} [init] */
+    /** @param {{baseModel?:string,version?:string,name?:string,category?:string,path?:string,nodes?:string[],assets?:string[],requiresAssets?:string[],requiresCustomNodes?:string[],requiresPipPackages?:string[],info?:WorkflowInfo,workflow?:{ [index:string]: Object; }}} [init] */
     constructor(init) { Object.assign(this, init) }
+    /** @type {string} */
+    baseModel;
+    /** @type {string} */
+    version;
+    /** @type {string} */
+    name;
+    /** @type {string} */
+    category;
+    /** @type {string} */
+    path;
     /** @type {string[]} */
     nodes = [];
     /** @type {string[]} */
     assets = [];
+    /** @type {string[]} */
+    requiresAssets = [];
+    /** @type {string[]} */
+    requiresCustomNodes = [];
+    /** @type {string[]} */
+    requiresPipPackages = [];
     /** @type {WorkflowInfo} */
     info;
     /** @type {{ [index:string]: Object; }} */
@@ -1908,6 +1947,23 @@ export class IdResponse {
     /** @type {?ResponseStatus} */
     responseStatus;
 }
+export class UpdateUpscaledVariants {
+    constructor(init) { Object.assign(this, init) }
+    getTypeName() { return 'UpdateUpscaledVariants' }
+    getMethod() { return 'POST' }
+    createResponse() { return new StringsResponse() }
+}
+export class HardDeleteWorkflow {
+    /** @param {{id?:number,force?:boolean}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    id;
+    /** @type {boolean} */
+    force;
+    getTypeName() { return 'HardDeleteWorkflow' }
+    getMethod() { return 'DELETE' }
+    createResponse() { return new StringResponse() }
+}
 export class HardDeleteGenerations {
     /** @param {{limit?:number,delete?:boolean}} [init] */
     constructor(init) { Object.assign(this, init) }
@@ -2028,9 +2084,9 @@ export class SendCaptionArtifactEvent {
     getMethod() { return 'POST' }
     createResponse() { return new StringsResponse() }
 }
-export class ReloadAiTasks {
+export class ReloadAgentEvents {
     constructor(init) { Object.assign(this, init) }
-    getTypeName() { return 'ReloadAiTasks' }
+    getTypeName() { return 'ReloadAgentEvents' }
     getMethod() { return 'POST' }
     createResponse() { return new StringResponse() }
 }
@@ -2082,6 +2138,21 @@ export class GetAiChat {
     getTypeName() { return 'GetAiChat' }
     getMethod() { return 'GET' }
     createResponse() { return new GetAiChatResponse() }
+}
+export class ResizeImages {
+    /** @param {{id?:string,width?:number,height?:number,limit?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {?string} */
+    id;
+    /** @type {?number} */
+    width;
+    /** @type {?number} */
+    height;
+    /** @type {?number} */
+    limit;
+    getTypeName() { return 'ResizeImages' }
+    getMethod() { return 'POST' }
+    createResponse() { return new StringsResponse() }
 }
 export class UpdateComfyAgent {
     /** @param {{deviceId?:string,queueCount?:number,gpus?:GpuInfo[],runningGenerationIds?:string[],queuedGenerationIds?:string[]}} [init] */
@@ -2263,6 +2334,17 @@ export class QueryArtifacts extends QueryDb_1 {
     /** @type {?string} */
     userId;
     getTypeName() { return 'QueryArtifacts' }
+    getMethod() { return 'GET' }
+    createResponse() { return new QueryResponse() }
+}
+export class GetArtifactVariants {
+    /** @param {{generationId?:string,artifactIds?:number[]}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {?string} */
+    generationId;
+    /** @type {?number[]} */
+    artifactIds;
+    getTypeName() { return 'GetArtifactVariants' }
     getMethod() { return 'GET' }
     createResponse() { return new QueryResponse() }
 }
@@ -2616,29 +2698,33 @@ export class FindCustomNodes {
     createResponse() { return new FindCustomNodesResponse() }
 }
 export class InstallPipPackage {
-    /** @param {{deviceId?:string,package?:string}} [init] */
+    /** @param {{deviceId?:string,package?:string,require?:boolean}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
     /** @type {string} */
     package;
+    /** @type {?boolean} */
+    require;
     getTypeName() { return 'InstallPipPackage' }
     getMethod() { return 'POST' }
     createResponse() { return new StringResponse() }
 }
 export class InstallCustomNode {
-    /** @param {{deviceId?:string,url?:string}} [init] */
+    /** @param {{deviceId?:string,url?:string,require?:boolean}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
     /** @type {string} */
     url;
+    /** @type {?boolean} */
+    require;
     getTypeName() { return 'InstallCustomNode' }
     getMethod() { return 'POST' }
     createResponse() { return new StringResponse() }
 }
 export class InstallModel {
-    /** @param {{deviceId?:string,saveTo?:string,url?:string,token?:string}} [init] */
+    /** @param {{deviceId?:string,saveTo?:string,url?:string,token?:string,require?:boolean}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
@@ -2648,6 +2734,8 @@ export class InstallModel {
     url;
     /** @type {?string} */
     token;
+    /** @type {?boolean} */
+    require;
     getTypeName() { return 'InstallModel' }
     getMethod() { return 'POST' }
     createResponse() { return new StringResponse() }
@@ -2673,6 +2761,17 @@ export class GetDeviceStatus {
     getTypeName() { return 'GetDeviceStatus' }
     getMethod() { return 'GET' }
     createResponse() { return new GetDeviceStatusResponse() }
+}
+export class DownloadFile {
+    /** @param {{path?:string,download?:boolean}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {string} */
+    path;
+    /** @type {?boolean} */
+    download;
+    getTypeName() { return 'DownloadFile' }
+    getMethod() { return 'GET' }
+    createResponse() { return new Blob() }
 }
 export class GetArtifact {
     /** @param {{path?:string,download?:boolean}} [init] */

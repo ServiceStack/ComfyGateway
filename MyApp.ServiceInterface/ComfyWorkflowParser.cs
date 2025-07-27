@@ -10,11 +10,34 @@ namespace MyApp.ServiceInterface;
 
 public class ComfyWorkflowParser
 {
-    private static List<Dictionary<string, object?>> GetWorkflowNodes(Dictionary<string, object?> workflow, ILogger log)
+    private static List<Dictionary<string, object?>> GetWorkflowNodes(Dictionary<string, object?> workflow, ILogger? log = null)
     {
         if (workflow["nodes"] is not List<object> nodesObj)
+        {
+            log?.LogError("No nodes found in workflow JSON");
             throw new Exception("No nodes found in workflow JSON");
+        }
         return nodesObj.Map(x => (Dictionary<string, object?>)x);
+    }
+
+    public static List<string> IgnoreClientNodes { get; } =
+    [
+        "Note",
+        "MarkdownNote",
+        "Reroute",
+        "PrimitiveNode",
+        "PrimitiveNode",
+    ];
+
+    public static HashSet<string> ExtractRequiredNodeTypes(Dictionary<string, object?> workflow, HashSet<string> ignoreNodes, ILogger? log = null)
+    {
+        var workflowNodes = ExtractNodeTypes(workflow, log);
+        foreach (var node in ignoreNodes.Union(IgnoreClientNodes))
+        {
+            workflowNodes.Remove(node);
+        }
+
+        return workflowNodes;
     }
     
     public static HashSet<string> ExtractNodeTypes(Dictionary<string, object?> workflow, ILogger? log = null)
@@ -28,6 +51,48 @@ public class ComfyWorkflowParser
             if (node.GetValueOrDefault("type") is string nodeType)
             {
                 ret.Add(nodeType);
+            }
+        }
+        return ret;
+    }
+
+    public static HashSet<string> ExtractRequiredPackages(Dictionary<string, object?> workflow, ILogger? log = null)
+    {
+        log ??= NullLogger.Instance;
+        var ret = new HashSet<string>();
+        
+        var nodes = GetWorkflowNodes(workflow, log);
+        foreach (var node in nodes)
+        {
+            if (node.GetValueOrDefault("type") is not string nodeType)
+                continue;
+            if (nodeType == "RequiresPipPackage")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add(widgetValues[0].ToString()!);
+                }
+            }
+        }
+        return ret;
+    }
+
+    public static HashSet<string> ExtractRequiresCustomNodeUrls(Dictionary<string, object?> workflow, ILogger? log = null)
+    {
+        log ??= NullLogger.Instance;
+        var ret = new HashSet<string>();
+        
+        var nodes = GetWorkflowNodes(workflow, log);
+        foreach (var node in nodes)
+        {
+            if (node.GetValueOrDefault("type") is not string nodeType)
+                continue;
+            if (nodeType == "RequiresCustomNode")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    ret.Add(widgetValues[0].ToString()!);
+                }
             }
         }
         return ret;
@@ -168,7 +233,7 @@ public class ComfyWorkflowParser
         }
         return ret;
     }
-
+    
     public static WorkflowInfo Parse(Dictionary<string,object?> workflow, string workflowName, Dictionary<string, NodeInfo> nodeDefs, ILogger? log = null)
     {
         log ??= NullLogger.Instance;
@@ -176,242 +241,11 @@ public class ComfyWorkflowParser
             throw new ArgumentException("Invalid workflow JSON");
 
         var nodes = nodesObj.Map(x => (Dictionary<string, object?>)x);
-        ComfyWorkflowType? workflowType = null;
-        ComfyPrimarySource? inputSource = null;
-        ComfyPrimarySource? outputSource = null;
 
-        foreach (var node in nodes)
-        {
-            if (node.GetValueOrDefault("type") is not string nodeType) continue;
+        var workflowInfo = CreateWorkflowInfo(workflowName, nodes);
 
-            // If has LoadImage then inputSource is Image
-            if (nodeType == "LoadImage")
-            {
-                inputSource = ComfyPrimarySource.Image;
-            }
-            else if (nodeType.Contains("LoadAudio"))
-            {
-                inputSource = ComfyPrimarySource.Audio;
-            }
-            else if (nodeType.Contains("LoadVideo"))
-            {
-                inputSource = ComfyPrimarySource.Video;
-            }
-
-            if (nodeType == "VAEDecode")
-            {
-                //If has VAEDecode then outputSource is Image
-                outputSource = ComfyPrimarySource.Image;
-            }
-            else if (nodeType == "VAEDecodeAudio")
-            {
-                //If has VAEDecodeAudio then outputSource is Image
-                outputSource = ComfyPrimarySource.Audio;
-            }
-            else if (nodeType == "ShowText|pysssss")
-            {
-                //If has ShowText|pysssss then outputSource could be Text
-                outputSource = ComfyPrimarySource.Text;
-            }
-        }
-
-        // Fallback to check for CLIPTextEncode for text prompts
-        if (inputSource == null)
-        {
-            foreach (var node in nodes)
-            {
-                if (node.GetValueOrDefault("type") is not string nodeType) continue;
-
-                // If has CLIPTextEncode then inputSource is Text
-                if (nodeType is 
-                    "CLIPTextEncode" 
-                    or "CLIPTextEncodeSDXL"
-                    or "ImpactWildcardEncode" // comfyui-impact-pack
-                )
-                {
-                    inputSource = ComfyPrimarySource.Text;
-                    break;
-                }
-            }
-        }
-
-        if (inputSource == ComfyPrimarySource.Text)
-        {
-            if (outputSource == ComfyPrimarySource.Image)
-            {
-                workflowType = ComfyWorkflowType.TextToImage;
-            }
-            else if (outputSource == ComfyPrimarySource.Audio)
-            {
-                workflowType = ComfyWorkflowType.TextToAudio;
-            }
-        }
-        else if (inputSource == ComfyPrimarySource.Image)
-        {
-            if (outputSource == ComfyPrimarySource.Text)
-            {
-                workflowType = ComfyWorkflowType.ImageToText;
-            }
-            else if (outputSource == ComfyPrimarySource.Image)
-            {
-                workflowType = ComfyWorkflowType.ImageToImage;
-            }
-        }
-        else if (inputSource == ComfyPrimarySource.Audio)
-        {
-            if (outputSource == ComfyPrimarySource.Text)
-            {
-                workflowType = ComfyWorkflowType.AudioToText;
-            }
-        }
-        else if (inputSource == ComfyPrimarySource.Video)
-        {
-            if (outputSource == ComfyPrimarySource.Text)
-            {
-                workflowType = ComfyWorkflowType.VideoToText;
-            }
-        }
-
-        if (inputSource == null)
-            throw new Exception("Could not determine input source");
-        if (outputSource == null)
-            throw new Exception("Could not determine output source");
-        if (workflowType == null)
-            throw new Exception("Could not determine workflow type");
-        
-        var workflowInfo = new WorkflowInfo
-        {
-            Name = workflowName,
-            Type = workflowType.Value,
-            Input = inputSource.Value,
-            Output = outputSource.Value,
-        };
-
-        // Find positive and negative prompt nodes by tracing KSampler links
-        int positiveNodeId = -1;
-        int negativeNodeId = -1;
-        string? positiveNodeType = null;
-        string? negativeNodeType = null;
-
-        var kSamplerNode = nodes.FirstOrDefault(n => n["type"] is "KSampler");
-        if (kSamplerNode != null)
-        {
-            if (kSamplerNode["inputs"] is List<object> kSamplerInputs)
-            {
-                foreach (var input in kSamplerInputs.Select(i => (Dictionary<string,object?>)i))
-                {
-                    if (input["name"]?.ToString() == "positive" && input["link"] != null)
-                    {
-                        int linkId = Convert.ToInt32(input["link"]);
-                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
-                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
-                    }
-                    else if (input["name"]?.ToString() == "negative" && input["link"] != null)
-                    {
-                        int linkId = Convert.ToInt32(input["link"]);
-                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
-                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
-                    }
-                }
-            }
-        }
-        var samplerCustomNode = nodes.FirstOrDefault(n => n["type"] is "SamplerCustom");
-        if (samplerCustomNode != null)
-        {
-            if (samplerCustomNode["inputs"] is List<object> samplerCustomInputs)
-            {
-                foreach (var input in samplerCustomInputs.Select(i => (Dictionary<string, object?>)i))
-                {
-                    if (input["name"]?.ToString() == "positive" && input["link"] != null)
-                    {
-                        int linkId = Convert.ToInt32(input["link"]);
-                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
-                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
-                    }
-                    else if (input["name"]?.ToString() == "negative" && input["link"] != null)
-                    {
-                        int linkId = Convert.ToInt32(input["link"]);
-                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
-                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
-                    }
-                }
-            }
-        }
-        
-        var basicGuiderNode = nodes.FirstOrDefault(n => n["type"] is "BasicGuider");
-        if (basicGuiderNode != null)
-        {
-            if (basicGuiderNode["inputs"] is List<object> basicGuiderInputs)
-            {
-                foreach (var input in basicGuiderInputs.Select(i => (Dictionary<string, object?>)i))
-                {
-                    if (input["name"]?.ToString() == "conditioning" && input["link"] != null)
-                    {
-                        int linkId = Convert.ToInt32(input["link"]);
-                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
-                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
-                    }
-                }
-            }
-        }
-        
-        var clipTextEncodeSDXL = nodes.FirstOrDefault(n => n["type"] is "CLIPTextEncodeSDXL");
-        if (clipTextEncodeSDXL != null)
-        {
-            if (clipTextEncodeSDXL["inputs"] is List<object> clipTextEncodeSDXLInputs)
-            {
-                foreach (var input in clipTextEncodeSDXLInputs.Select(i => (Dictionary<string, object?>)i))
-                {
-                    if (input["name"]?.ToString() == "text_l" && input["link"] != null)
-                    {
-                        int linkId = Convert.ToInt32(input["link"]);
-                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
-                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
-                    }
-                    else if (input["name"]?.ToString() == "text_g" && input["link"] != null)
-                    {
-                        int linkId = Convert.ToInt32(input["link"]);
-                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
-                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
-                    }
-                }
-            }
-        }
-
-        // Extract workflow inputs
         var inputs = new List<ComfyInputDefinition>();
-        if (positiveNodeId != -1)
-        {
-            // Add positive prompt input
-            inputs.Add(new ComfyInputDefinition
-            {
-                ClassType = positiveNodeType,
-                NodeId = positiveNodeId,
-                ValueIndex = 0,
-                Name = "positivePrompt",
-                Label = "Positive Prompt",
-                Type = ComfyInputType.String,
-                Tooltip = "The text to be encoded for positive conditioning",
-                Multiline = true,
-                Default = GetNodeWidgetValue(nodes, positiveNodeId, 0)
-            });
-        }
-        if (negativeNodeId != -1)
-        {
-            // Add negative prompt input
-            inputs.Add(new ComfyInputDefinition
-            {
-                ClassType = negativeNodeType,
-                NodeId = negativeNodeId,
-                ValueIndex = 0,
-                Name = "negativePrompt",
-                Label = "Negative Prompt",
-                Type = ComfyInputType.String,
-                Tooltip = "The text to be encoded for negative conditioning",
-                Multiline = true,
-                Default = GetNodeWidgetValue(nodes, negativeNodeId, 0)
-            });
-        }
+        inputs.AddRange(GetPromptInputs(nodes, links));
 
         var loadCheckpointNode = nodes.FirstOrDefault(n => n["type"]?.ToString() is
             "CheckpointLoaderSimple" or "unCLIPCheckpointLoader" or "CheckpointLoader" or "ImageOnlyCheckpointLoader" or
@@ -438,7 +272,22 @@ public class ComfyWorkflowParser
             }
         }
 
+        void IfNodeType(string nodeType, int minWidgetValues, Action<Dictionary<string, object?>, List<object>> action)
+        {
+            var node = nodes.FirstOrDefault(n => n["type"] is string s && s == nodeType);
+            if (node != null)
+            {
+                if (node["widgets_values"] is List<object> widgetValues && widgetValues.Count >= minWidgetValues)
+                {
+                    action(node, widgetValues);
+                }
+            }
+        }
+
         // Extract sampling parameters from KSampler node
+        var kSamplerNode = nodes.FirstOrDefault(n => n["type"] is "KSampler");
+        var samplerCustomNode = nodes.FirstOrDefault(n => n["type"] is "SamplerCustom");
+        
         if (kSamplerNode != null)
         {
             if (kSamplerNode["widgets_values"] is List<object> { Count: >= 7 } widgetValues)
@@ -536,9 +385,9 @@ public class ComfyWorkflowParser
                 });
             }
         }
-        else if (samplerCustomNode != null)
+        else
         {
-            if (samplerCustomNode["widgets_values"] is List<object> { Count: >= 4 } widgetValues)
+            if (samplerCustomNode?["widgets_values"] is List<object> { Count: >= 4 } widgetValues)
             {
                 nodeDefs.TryGetValue("SamplerCustom", out var nodeDef);
                 var nodeId = Convert.ToInt32(samplerCustomNode["id"]);
@@ -575,62 +424,70 @@ public class ComfyWorkflowParser
             }
         }
 
-        var loadImageNode = nodes.FirstOrDefault(n => n["type"] is "LoadImage");
-        if (loadImageNode != null)
-        {
-            if (loadImageNode["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
-            {
-                var nodeId = Convert.ToInt32(loadImageNode["id"]);
-                inputs.Add(new ComfyInputDefinition
-                {
-                    ClassType = "LoadImage",
-                    NodeId = nodeId,
-                    ValueIndex = 0,
-                    Name = "image",
-                    Label = "Image",
-                    Type = ComfyInputType.Image,
-                    Tooltip = "Select Image",
-                });
-            }
-        }
+        IfNodeType("LoadImage", 1, (node, widgetValues) => {
+            inputs.Add(new ComfyInputDefinition {
+                ClassType = "LoadImage",
+                NodeId = Convert.ToInt32(node["id"]),
+                ValueIndex = 0,
+                Name = "image",
+                Label = "Image",
+                Type = ComfyInputType.Image,
+                Tooltip = "Select Image",
+                Upload = true,
+            });
+        });
+        
+        IfNodeType("LoadAudio", 1, (node, widgetValues) => {
+            inputs.Add(new ComfyInputDefinition {
+                ClassType = "LoadAudio",
+                NodeId = Convert.ToInt32(node["id"]),
+                ValueIndex = 0,
+                Name = "audio",
+                Label = "Audio",
+                Type = ComfyInputType.Audio,
+                Tooltip = "Select Audio",
+                Upload = true,
+            });
+        });
+        
+        IfNodeType("LoadVideo", 1, (node, widgetValues) => {
+            inputs.Add(new ComfyInputDefinition {
+                ClassType = "LoadVideo",
+                NodeId = Convert.ToInt32(node["id"]),
+                ValueIndex = 0,
+                Name = "video",
+                Label = "Video",
+                Type = ComfyInputType.Video,
+                Tooltip = "Select Video",
+                Upload = true,
+            });
+        });
+        
+        IfNodeType("TT-LoadAudio", 1, (node, widgetValues) => {
+            inputs.Add(new ComfyInputDefinition {
+                ClassType = "TT-LoadAudio",
+                NodeId = Convert.ToInt32(node["id"]),
+                ValueIndex = 0,
+                Name = "audio",
+                Label = "Audio",
+                Type = ComfyInputType.Audio,
+                Tooltip = "Select Audio",
+                Upload = true,
+            });
+        });
 
-        var loadTTAudioNode = nodes.FirstOrDefault(n => n["type"] is "TT-LoadAudio");
-        if (loadTTAudioNode != null)
-        {
-            if (loadTTAudioNode["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
-            {
-                var nodeId = Convert.ToInt32(loadTTAudioNode["id"]);
-                inputs.Add(new ComfyInputDefinition
-                {
-                    ClassType = "TT-LoadAudio",
-                    NodeId = nodeId,
-                    ValueIndex = 0,
-                    Name = "audio",
-                    Label = "Audio",
-                    Type = ComfyInputType.Audio,
-                    Tooltip = "Select Audio",
-                });
-            }
-        }
-
-        var loadTTVideoNode = nodes.FirstOrDefault(n => n["type"] is "TT-LoadVideoAudio");
-        if (loadTTVideoNode != null)
-        {
-            if (loadTTVideoNode["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
-            {
-                var nodeId = Convert.ToInt32(loadTTVideoNode["id"]);
-                inputs.Add(new ComfyInputDefinition
-                {
-                    ClassType = "TT-LoadVideoAudio",
-                    NodeId = nodeId,
-                    ValueIndex = 0,
-                    Name = "video",
-                    Label = "Video",
-                    Type = ComfyInputType.Enum,
-                    Tooltip = "Select Video",
-                });
-            }
-        }
+        IfNodeType("TT-LoadVideoAudio", 1, (node, widgetValues) => {
+            inputs.Add(new ComfyInputDefinition {
+                ClassType = "TT-LoadVideoAudio",
+                NodeId = Convert.ToInt32(node["id"]),
+                ValueIndex = 0,
+                Name = "video",
+                Label = "Video",
+                Type = ComfyInputType.Enum,
+                Tooltip = "Select Video",
+                Upload = true,
+            });
+        });
 
         foreach (var node in nodes)
         {
@@ -907,10 +764,317 @@ public class ComfyWorkflowParser
                     }
                 }
             }
+            else if (nodeType == "RequiresCustomNode")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    var repo = widgetValues[0].ToString();
+                    if (!string.IsNullOrEmpty(repo))
+                    {
+                        workflowInfo.CustomNodes.Add(repo);
+                    }
+                }
+            }
+            else if (nodeType == "RequiresPipPackage")
+            {
+                if (node["widgets_values"] is List<object> { Count: >= 1 } widgetValues)
+                {
+                    var package = widgetValues[0].ToString();
+                    if (!string.IsNullOrEmpty(package))
+                    {
+                        workflowInfo.PipPackages.Add(package);
+                    }
+                }
+            }
         }
 
         workflowInfo.Inputs = inputs;
         return workflowInfo;
+    }
+
+    private static WorkflowInfo CreateWorkflowInfo(string workflowName, List<Dictionary<string, object?>> nodes)
+    {
+        ComfyWorkflowType? workflowType = null;
+        ComfyPrimarySource? inputSource = null;
+        ComfyPrimarySource? outputSource = null;
+
+        foreach (var node in nodes)
+        {
+            if (node.GetValueOrDefault("type") is not string nodeType) continue;
+
+            // If has LoadImage then inputSource is Image
+            if (nodeType == "LoadImage")
+            {
+                inputSource = ComfyPrimarySource.Image;
+            }
+            else if (nodeType.Contains("LoadAudio"))
+            {
+                inputSource = ComfyPrimarySource.Audio;
+            }
+            else if (nodeType.Contains("LoadVideo"))
+            {
+                inputSource = ComfyPrimarySource.Video;
+            }
+
+            if (nodeType == "VAEDecode")
+            {
+                //If has VAEDecode then outputSource is Image
+                outputSource = ComfyPrimarySource.Image;
+            }
+            else if (nodeType == "VAEDecodeAudio")
+            {
+                //If has VAEDecodeAudio then outputSource is Image
+                outputSource = ComfyPrimarySource.Audio;
+            }
+            else if (nodeType == "ShowText|pysssss")
+            {
+                //If has ShowText|pysssss then outputSource could be Text
+                outputSource = ComfyPrimarySource.Text;
+            }
+            else if (nodeType is "PreviewImage" or "SaveImage")
+            {
+                // If has PreviewImage or SaveImage then outputSource is Image
+                outputSource = ComfyPrimarySource.Image;
+            }
+            else if (nodeType == "SaveWEBM")
+            {
+                // If has SaveWEBM then outputSource is Video
+                outputSource = ComfyPrimarySource.Video;
+            }
+        }
+
+        // Fallback to check for CLIPTextEncode for text prompts
+        if (inputSource == null)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.GetValueOrDefault("type") is not string nodeType) continue;
+
+                // If has CLIPTextEncode then inputSource is Text
+                if (nodeType is 
+                    "CLIPTextEncode" 
+                    or "CLIPTextEncodeSDXL"
+                    or "ImpactWildcardEncode" // comfyui-impact-pack
+                   )
+                {
+                    inputSource = ComfyPrimarySource.Text;
+                    break;
+                }
+            }
+        }
+
+        if (inputSource == ComfyPrimarySource.Text)
+        {
+            if (outputSource == ComfyPrimarySource.Image)
+            {
+                workflowType = ComfyWorkflowType.TextToImage;
+            }
+            else if (outputSource == ComfyPrimarySource.Audio)
+            {
+                workflowType = ComfyWorkflowType.TextToAudio;
+            }
+        }
+        else if (inputSource == ComfyPrimarySource.Image)
+        {
+            if (outputSource == ComfyPrimarySource.Text)
+            {
+                workflowType = ComfyWorkflowType.ImageToText;
+            }
+            else if (outputSource == ComfyPrimarySource.Image)
+            {
+                workflowType = ComfyWorkflowType.ImageToImage;
+            }
+            else if (outputSource == ComfyPrimarySource.Video)
+            {
+                workflowType = ComfyWorkflowType.ImageToVideo;
+            }
+        }
+        else if (inputSource == ComfyPrimarySource.Audio)
+        {
+            if (outputSource == ComfyPrimarySource.Text)
+            {
+                workflowType = ComfyWorkflowType.AudioToText;
+            }
+        }
+        else if (inputSource == ComfyPrimarySource.Video)
+        {
+            if (outputSource == ComfyPrimarySource.Text)
+            {
+                workflowType = ComfyWorkflowType.VideoToText;
+            }
+        }
+
+        if (inputSource == null)
+            throw new Exception("Could not determine input source");
+        if (outputSource == null)
+            throw new Exception("Could not determine output source");
+        if (workflowType == null)
+            throw new Exception("Could not determine workflow type");
+        
+        var workflowInfo = new WorkflowInfo
+        {
+            Name = workflowName,
+            Type = workflowType.Value,
+            Input = inputSource.Value,
+            Output = outputSource.Value,
+        };
+        return workflowInfo;
+    }
+
+    public static List<ComfyInputDefinition> GetPromptInputs(List<Dictionary<string, object?>> nodes, List<object> links)
+    {
+        var inputs = new List<ComfyInputDefinition>();
+        
+        // Find positive and negative prompt nodes by tracing KSampler links
+        int positiveNodeId = -1;
+        int negativeNodeId = -1;
+        string? positiveNodeType = null;
+        string? negativeNodeType = null;
+
+        var kSamplerNode = nodes.FirstOrDefault(n => n["type"] is "KSampler");
+        if (kSamplerNode != null)
+        {
+            if (kSamplerNode["inputs"] is List<object> kSamplerInputs)
+            {
+                foreach (var input in kSamplerInputs.Select(i => (Dictionary<string,object?>)i))
+                {
+                    if (input["name"]?.ToString() == "positive" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
+                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                    else if (input["name"]?.ToString() == "negative" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
+                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                }
+            }
+        }
+
+        var samplerCustomNode = nodes.FirstOrDefault(n => n["type"] is "SamplerCustom");
+        if (samplerCustomNode != null)
+        {
+            if (samplerCustomNode["inputs"] is List<object> samplerCustomInputs)
+            {
+                foreach (var input in samplerCustomInputs.Select(i => (Dictionary<string, object?>)i))
+                {
+                    if (input["name"]?.ToString() == "positive" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
+                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                    else if (input["name"]?.ToString() == "negative" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
+                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                }
+            }
+        }
+        
+        // Upscalers won't have a KSampler node
+        var ultimateSdUpscaleNode = nodes.FirstOrDefault(n => n["type"] is "UltimateSDUpscale");
+        if (ultimateSdUpscaleNode != null)
+        {
+            if (ultimateSdUpscaleNode["inputs"] is List<object> ultimateSdUpscaleInputs)
+            {
+                foreach (var input in ultimateSdUpscaleInputs.Select(i => (Dictionary<string, object?>)i))
+                {
+                    if (input["name"]?.ToString() == "positive" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
+                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                    else if (input["name"]?.ToString() == "negative" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
+                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                }
+            }
+        }
+        
+        var basicGuiderNode = nodes.FirstOrDefault(n => n["type"] is "BasicGuider");
+        if (basicGuiderNode != null)
+        {
+            if (basicGuiderNode["inputs"] is List<object> basicGuiderInputs)
+            {
+                foreach (var input in basicGuiderInputs.Select(i => (Dictionary<string, object?>)i))
+                {
+                    if (input["name"]?.ToString() == "conditioning" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
+                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                }
+            }
+        }
+        
+        var clipTextEncodeSDXL = nodes.FirstOrDefault(n => n["type"] is "CLIPTextEncodeSDXL");
+        if (clipTextEncodeSDXL != null)
+        {
+            if (clipTextEncodeSDXL["inputs"] is List<object> clipTextEncodeSDXLInputs)
+            {
+                foreach (var input in clipTextEncodeSDXLInputs.Select(i => (Dictionary<string, object?>)i))
+                {
+                    if (input["name"]?.ToString() == "text_l" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        positiveNodeId = GetSourceNodeFromLink(linkId, links);
+                        positiveNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                    else if (input["name"]?.ToString() == "text_g" && input["link"] != null)
+                    {
+                        int linkId = Convert.ToInt32(input["link"]);
+                        negativeNodeId = GetSourceNodeFromLink(linkId, links);
+                        negativeNodeType = GetSourceNodeTypeFromLink(nodes, linkId, links);
+                    }
+                }
+            }
+        }
+
+        // Extract workflow inputs
+        if (positiveNodeId != -1)
+        {
+            // Add positive prompt input
+            inputs.Add(new ComfyInputDefinition
+            {
+                ClassType = positiveNodeType,
+                NodeId = positiveNodeId,
+                ValueIndex = 0,
+                Name = "positivePrompt",
+                Label = "Positive Prompt",
+                Type = ComfyInputType.String,
+                Tooltip = "The text to be encoded for positive conditioning",
+                Multiline = true,
+                Default = GetNodeWidgetValue(nodes, positiveNodeId, 0)
+            });
+        }
+        if (negativeNodeId != -1)
+        {
+            // Add negative prompt input
+            inputs.Add(new ComfyInputDefinition
+            {
+                ClassType = negativeNodeType,
+                NodeId = negativeNodeId,
+                ValueIndex = 0,
+                Name = "negativePrompt",
+                Label = "Negative Prompt",
+                Type = ComfyInputType.String,
+                Tooltip = "The text to be encoded for negative conditioning",
+                Multiline = true,
+                Default = GetNodeWidgetValue(nodes, negativeNodeId, 0)
+            });
+        }
+        return inputs;
     }
 
     private static int GetSourceNodeFromLink(int linkId, List<object> links)

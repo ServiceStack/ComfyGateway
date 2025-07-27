@@ -272,7 +272,7 @@
     },
     {
       "id": 5,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         -33.70664978027344,
         381.8258361816406
@@ -289,7 +289,7 @@
       "properties": {
         "cnr_id": "comfy-asset-downloader",
         "ver": "cb7151a82f91ab3da819f469945eafe3ac6ec7f8",
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://civitai.com/api/download/models/1672307?type=Model&format=SafeTensor&size=pruned&fp=fp16",

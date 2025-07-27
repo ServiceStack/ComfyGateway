@@ -9,12 +9,11 @@ using ServiceStack.OrmLite;
 
 namespace MyApp.ServiceInterface;
 
-public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFactory dbFactory, AppData appData)
+public class AgentEventsManager(ILogger<AgentEventsManager> log, AppData appData)
 {
-    // clientId => deviceId
-    private ConcurrentDictionary<string, string> pendingGenerations = new(); 
-    
     private readonly ConcurrentDictionary<string, BlockingCollection<AgentEvent>> agentTaskQueues = new();
+    
+    public ConcurrentDictionary<string, WorkflowGeneration> QueuedGenerations = new();
 
     public List<ComfyAgent> GetComfyAgents(ComfyAgentQuery options = default)
     {
@@ -63,11 +62,26 @@ public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFa
     }
     public List<string> GetConnectedDeviceIds() => KeysWithoutLock().ToList();
 
+    public void QueueGeneration(WorkflowGeneration generation)
+    {
+        QueuedGenerations[generation.Id] = generation;
+        SignalGenerationRequest();
+    }
+
+    public void QueueAiTask(IAiTask task)
+    {
+        AiTasks[task.Id] = task;
+        SignalAiTaskRequest();
+    }
+
     public long GenerationRequest = 0;
     public void SignalGenerationRequest() => Interlocked.Increment(ref GenerationRequest);
 
     public long GenerationUpdates = 0;
     public void SignalGenerationUpdated() => Interlocked.Increment(ref GenerationUpdates);
+
+    public long AiTaskRequest = 0;
+    public void SignalAiTaskRequest() => Interlocked.Increment(ref AiTaskRequest);
 
     public async Task<bool> WaitForUpdatedGenerationAsync(int timeoutMs)
     {
@@ -209,7 +223,7 @@ public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFa
         task.RefId ??= Guid.NewGuid().ToString("N");
         task.ReplyTo = $"/api/{nameof(CompleteOllamaGenerateTask)}".AddQueryParam("taskId", task.Id);
         db.Insert(task);
-        AiTasks[task.Id] = task;
+        QueueAiTask(task);
         return task;
     }
 
@@ -238,22 +252,22 @@ public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFa
         task.RefId ??= Guid.NewGuid().ToString("N");
         task.ReplyTo = $"/api/{nameof(CompleteOpenAiChatTask)}".AddQueryParam("taskId", task.Id);
         db.Insert(task);
-        AiTasks[task.Id] = task;
+        QueueAiTask(task);
         return task;
     }
 
-    public List<AgentEvent> GetNextAiTasks(IDbConnection db, ComfyAgent agent, string userId, int take)
+    public AgentEvent[] GetNextAiTasks(ComfyAgent agent, string userId, int take)
     {
-        var ret = new List<AgentEvent>();
+        var pendingTasks = AiTasks.ValuesWithoutLock()
+            .Where(x => (x.DeviceId == null || x.DeviceId == agent.DeviceId)
+                        && agent.LanguageModels?.Contains(x.Model) == true)
+            .OrderBy(x => x.Id)
+            .ToList();
 
-        if (agent.LanguageModels?.Count > 0 && AiTasks.Count > 0)
+        var ret = new List<AgentEvent>();
+        if (agent.LanguageModels?.Count > 0 && !AiTasks.IsEmpty)
         {
             using var dbTasks = appData.OpenAiTaskDb();
-        
-            var pendingTasks = AiTasks.Values.AsEnumerable()
-                .Where(x => (x.DeviceId == null || x.DeviceId == agent.DeviceId)
-                    && agent.LanguageModels.Contains(x.Model))
-                .OrderBy(x => x.Id);
             
             foreach (var task in pendingTasks)
             {
@@ -327,7 +341,7 @@ public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFa
             }
         }
         
-        return ret;
+        return ret.ToArray();
     }
 
     private static List<OllamaGenerateTask> GetPendingOllamaGenerateTasks(IDbConnection dbTasks, ComfyAgent agent)
@@ -340,8 +354,17 @@ public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFa
         return pendingTasks;
     }
 
-    public void Reload()
+    public void Reload(IDbConnection db)
     {
+        QueuedGenerations.Clear();
+        var queuedGenerations = db.Select(db.From<WorkflowGeneration>()
+            .Where(x => x.Result == null && x.Error == null && x.DeletedDate == null));
+        foreach (var generation in queuedGenerations)
+        {
+            QueuedGenerations[generation.Id] = generation;
+        }
+        log.LogInformation("Reloaded {Count} pending generations", QueuedGenerations.Count);
+        
         AiTasks.Clear();
         using var dbTasks = appData.OpenAiTaskDb();
         var pendingOllamaGenerateTasks = dbTasks
@@ -367,6 +390,193 @@ public class AgentEventsManager(ILogger<AgentEventsManager> log, IDbConnectionFa
     public void RemoveAgent(string deviceId)
     {
         agentTaskQueues.TryRemove(deviceId, out _);
+    }
+    
+    public WorkflowGeneration[] GetNextGenerations(IDbConnection db, ComfyAgent agent, string userId, int take)
+    {
+        var queuedGenerations = this.QueuedGenerations.ValuesWithoutLock().ToList();
+        if (queuedGenerations.Count == 0)
+            return [];
+
+        bool AssignedToAgent(string generationId)
+        {
+            var updated = db.UpdateOnly(() => new WorkflowGeneration
+            {
+                DeviceId = agent.DeviceId,
+                ModifiedBy = userId,
+                ModifiedDate = DateTime.UtcNow,
+                StatusUpdate = GenerationStatus.AssignedToAgent,
+            }, where: x => x.Id == generationId && x.DeviceId == null);
+
+            // Whether it's been already assigned, or we've just assigned it now, remove it from the queue
+            QueuedGenerations.Remove(generationId, out _);
+            queuedGenerations.RemoveAll(x => x.Id == generationId);
+
+            return updated != 0;
+        }
+
+        var incompatibleIds = new HashSet<string>();
+        bool CanRunWorkflow(WorkflowGeneration gen)
+        {
+            if (incompatibleIds.Contains(gen.Id))
+                return false;
+            if (!appData.AgentCanRunWorkflow(agent, gen))
+            {
+                incompatibleIds.Add(gen.Id);
+                return false;
+            }
+            return true;
+        }
+        
+        var missingAssignedGenerationsCount = 0;
+        var pendingUserOrDeviceGenerationsCount = 0;
+        var pendingForAnyDeviceCount = 0;
+        var unassignedPendingGenerationsCount = 0;
+        var reassignedForInactiveAgentsCount = 0;
+        var ret = new List<WorkflowGeneration>();
+        
+        // Check for any missing assigned generations for this device
+        // Generations can be lost when agents restart, resend any assigned generations that is not in their queue 
+        var missingAssignedGenerations = queuedGenerations
+            .Where(x => x.Result == null && x.Error == null && x.DeletedDate == null 
+                        && x.DeviceId == agent.DeviceId && !agent.QueuedIds.Contains(x.Id))
+            .OrderBy(x => x.CreatedDate);
+        foreach (var missingAssignedGeneration in missingAssignedGenerations)
+        {
+            if (ret.Any(x => x.Id == missingAssignedGeneration.Id))
+                continue;
+            if (!AssignedToAgent(missingAssignedGeneration.Id)) 
+                continue;
+
+            ret.Add(missingAssignedGeneration);
+            missingAssignedGenerationsCount++;
+            if (ret.Count >= take)
+                break;
+        }
+            
+        if (queuedGenerations.Count > 0 && ret.Count <= take)
+        {
+            // Check for any pending generations for this device or user
+            var pendingUserOrDeviceGenerations = queuedGenerations
+                .Where(x => x.Result == null && x.Error == null && x.DeletedDate == null && x.PromptId == null
+                            && (x.DeviceId == agent.DeviceId || x.UserId == userId))
+                .OrderBy(x => x.CreatedDate)
+                .ToList();
+            foreach (var pendingGeneration in pendingUserOrDeviceGenerations)
+            {
+                if (ret.Any(x => x.Id == pendingGeneration.Id))
+                    continue;
+                if (!CanRunWorkflow(pendingGeneration)) 
+                    continue;
+                if (!AssignedToAgent(pendingGeneration.Id)) 
+                    continue;
+
+                ret.Add(pendingGeneration);
+                pendingUserOrDeviceGenerationsCount++;
+                if (ret.Count >= take)
+                    break;
+            }
+        }
+
+        if (queuedGenerations.Count > 0 && ret.Count <= take)
+        {
+            // Check for any pending generations for any device
+            var pendingForAnyDevice = queuedGenerations
+                .Where(x => x.Result == null && x.Error == null && x.DeletedDate == null && x.PromptId == null && x.DeviceId == null)
+                .OrderBy(x => x.CreatedDate)
+                .ToList();
+            foreach (var pendingGeneration in pendingForAnyDevice)
+            {
+                if (ret.Any(x => x.Id == pendingGeneration.Id))
+                    continue;
+                if (!CanRunWorkflow(pendingGeneration))
+                    continue;
+                if (!AssignedToAgent(pendingGeneration.Id)) 
+                    continue;
+
+                ret.Add(pendingGeneration);
+                pendingForAnyDeviceCount++;
+                if (ret.Count >= take)
+                    break;
+            }
+        }
+
+        int updated = 0;
+        if (queuedGenerations.Count > 0 && ret.Count <= take)
+        {
+            // Check for any pending generations for unassigned device
+            var unassignedPendingGenerations = queuedGenerations
+                .Where(x => x.Result == null && x.Error == null && x.DeletedDate == null && x.DeviceId == null)
+                .OrderBy(x => x.CreatedDate)
+                .ToList();
+            foreach (var queuedGeneration in unassignedPendingGenerations)
+            {
+                if (ret.Any(x => x.Id == queuedGeneration.Id))
+                    continue;
+                if (!CanRunWorkflow(queuedGeneration))
+                    continue;
+                if (!AssignedToAgent(queuedGeneration.Id)) 
+                    continue;
+
+                ret.Add(queuedGeneration);
+                unassignedPendingGenerationsCount++;
+                if (ret.Count >= take)
+                    break;
+            }
+        }
+
+        if (queuedGenerations.Count > 0 && ret.Count <= take)
+        {
+            // Reassign any pending generations to inactive agents
+            var activeDeviceIds = appData.GetActiveComfyAgentDeviceIds();
+            var reassignedForInactiveAgents = queuedGenerations
+                .Where(x => x.Result == null && x.Error == null && x.DeletedDate == null 
+                            && x.CreatedDate < DateTime.UtcNow.AddMinutes(-5) && !activeDeviceIds.Contains(x.DeviceId))
+                .OrderBy(x => x.CreatedDate)
+                .ToList();
+            foreach (var queuedGeneration in reassignedForInactiveAgents)
+            {
+                if (ret.Any(x => x.Id == queuedGeneration.Id))
+                    continue;
+                if (!CanRunWorkflow(queuedGeneration))
+                    continue;
+                if (!AssignedToAgent(queuedGeneration.Id)) 
+                    continue;
+
+                ret.Add(queuedGeneration);
+                reassignedForInactiveAgentsCount++;
+                if (ret.Count >= take)
+                    break;
+            }
+        }
+        
+        if (ret.Count > take)
+            ret = ret.Take(take).ToList();
+
+        if (ret.Count > 0)
+        {
+            log.LogInformation("Agent {DeviceId} ({AgentIp}) has been assigned {Count} new generations: " +
+                               "{MissingAssignedDeviceGenerationsCount} missing assigned, " +
+                               "{PendingUserOrDeviceGenerationsCount} pending user or device, " +
+                               "{PendingForAnyDeviceCount} pending for any device, " +
+                               "{UnassignedPendingGenerationsCount} unassigned, " +
+                               "{ReassignedForInactiveAgentsCount} reassigned for inactive agents.", 
+                agent.DeviceId, agent.LastIp, ret.Count, missingAssignedGenerationsCount, 
+                pendingUserOrDeviceGenerationsCount, pendingForAnyDeviceCount, 
+                unassignedPendingGenerationsCount, reassignedForInactiveAgentsCount);
+        }
+        else
+        {
+            log.LogInformation("Agent {DeviceId} ({AgentIp}) has not been assigned any new generations.", 
+                agent.DeviceId, agent.LastIp);
+        }
+        
+        return ret.ToArray();
+    }
+
+    public void RemoveGeneration(string generationId)
+    {
+        QueuedGenerations.Remove(generationId, out _);
     }
 }
 

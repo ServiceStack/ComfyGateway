@@ -189,3 +189,39 @@ export function pluralize(word, count) {
 export const acceptedImages = `${wordList('WEBP,JPG,PNG,GIF,BMP,TIFF')} (max 5MB)`
 export const acceptedVideos = `${wordList('MP4,MOV,WEBM,MKV,AVI,WMV,OGG')} (max 50MB)`
 export const acceptedAudios = `${wordList('MP3,M4A,AAC,FLAC,WAV,WMA')} (max 10MB)`
+
+export function getResolutionClass(width, height) {
+    // Calculate total pixels
+    const totalPixels = width * height;
+
+    // Define resolution thresholds (in millions of pixels)
+    const resolutionMap = [
+        { threshold: 33, label: '8K' },    // 7680×4320 = ~33M pixels
+        { threshold: 24, label: '6K' },    // 6144×3456 = ~21M pixels  
+        { threshold: 14, label: '5K' },    // 5120×2880 = ~15M pixels
+        { threshold: 8, label: '4K' },     // 3840×2160 = ~8M pixels
+        { threshold: 4, label: '2K' },     // 2560×1440 = ~4M pixels
+        { threshold: 2, label: '1080p' },  // 1920×1080 = ~2M pixels
+        { threshold: 1, label: '720p' },   // 1280×720 = ~1M pixels
+        { threshold: 0, label: '480p' }    // 854×480 = ~0.4M pixels
+    ];
+
+    const pixelsInMillions = totalPixels / 1000000;
+
+    // Find the appropriate classification
+    for (const resolution of resolutionMap) {
+        if (pixelsInMillions >= resolution.threshold) {
+            return resolution.label;
+        }
+    }
+
+    return '480p'; // fallback for very low resolutions
+}
+
+export function getHDClass(width, height) {
+    if (!width || !height) return ''
+    const resolution = getResolutionClass(width, height)
+    return resolution.endsWith('K')
+        ? resolution
+        : ''
+}

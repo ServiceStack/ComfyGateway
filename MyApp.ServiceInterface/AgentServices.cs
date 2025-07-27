@@ -19,6 +19,8 @@ public class AgentServices(ILogger<AgentServices> log,
     ICommandExecutor executor)
     : Service
 {
+    public AgentEventsManager AgentManager { get; } = agentManager;
+    
     public object Post(UpdateComfyAgent request)
     {
         var userId = Request.AssertApiKeyUserId();
@@ -163,7 +165,7 @@ public class AgentServices(ILogger<AgentServices> log,
     public async Task<object> Get(GetComfyAgentEvents request)
     {
         var startedAt = DateTime.UtcNow;
-        var waitForSecs = 60;
+        var waitFor = TimeSpan.FromSeconds(60);
 
         var ret = new GetComfyAgentEventsResponse();
         
@@ -176,75 +178,87 @@ public class AgentServices(ILogger<AgentServices> log,
             return ret;
         }
         agent.SetLastUpdate();
+        
+        log.LogDebug("🖥 GetComfyAgentEvents from {DeviceId} {HostAddress} 📬 {QueueCount}\n    Language Models: {LanguageModels}\n    {GenerationsCount} Generations, {AiTasksCount} AI Tasks",
+            agent.DeviceId, agent.LastIp, agent.QueueCount, agent.LanguageModels?.Join(", ") ?? "none", 
+            agentManager.QueuedGenerations.Count, AgentManager.AiTasks.Count);
 
-        // Return any pending events immediately
-        var agentEvents = agentManager.GetAgentEvents(agent.DeviceId);
-        while (agentEvents.TryTake(out var msg) && ret.Results.Count < MaxAgentQueueCount)
-        {
-            ret.Results.Add(msg);
-        }
-        if (ret.Results.Count > 0)
-            return ret;
-
-        // Check for any pending generations or AI Tasks for this device
         var spareCapacity = MaxAgentQueueCount - agent.QueueCount;
-        if (spareCapacity > 0)
+        long generationsCounter = -1;
+        long aiTasksCounter = -1;
+        var pollCounter = 0;
+        do
         {
-            var nextGenerations = appData.GetNextGenerations(db, agent, userId, take:spareCapacity);
-            if (nextGenerations.Count > 0)
-            {
-                ret.Results.AddRange(nextGenerations.Map(x => x.ToExecWorkflow()));
-                return ret;
-            }
-        
-            var aiTaskEvents = agentManager.GetNextAiTasks(db, agent, userId, take:spareCapacity);
-            if (aiTaskEvents.Count > 0)
-            {
-                ret.Results.AddRange(aiTaskEvents);
-                return ret;
-            }
-        }
-        
-        // If agent is at max capacity, wait for it to free up, checking for new events or spare capacity
-        if (spareCapacity <= 0)
-            log.LogInformation("Agent {DeviceId} is at max capacity, waiting for new agent events or spare capacity.", request.DeviceId);
-
-        while (spareCapacity <= 0)
-        {
-            agentEvents = agentManager.GetAgentEvents(agent.DeviceId);
+            // Return any pending events immediately
+            var agentEvents = AgentManager.GetAgentEvents(agent.DeviceId);
             while (agentEvents.TryTake(out var msg) && ret.Results.Count < MaxAgentQueueCount)
             {
                 ret.Results.Add(msg);
             }
             if (ret.Results.Count > 0)
-                return ret;
-            
-            var aiTaskEvents = agentManager.GetNextAiTasks(db, agent, userId, take:1);
-            if (aiTaskEvents.Count > 0)
             {
-                ret.Results.AddRange(aiTaskEvents);
+                log.LogInformation("👉 GetComfyAgentEvents: {DeviceId} - assigned {Count} new agent events", 
+                    agent.DeviceId, ret.Results.Count);
                 return ret;
+            }
+
+            // Check for any pending generations for this device
+            if (generationsCounter != AgentManager.GenerationRequest && spareCapacity > 0)
+            {
+                var nextGenerations = AgentManager.GetNextGenerations(db, agent, userId, take: spareCapacity);
+                if (nextGenerations.Length > 0)
+                {
+                    ret.Results.AddRange(nextGenerations.Map(x => x.ToExecWorkflow()));
+                    log.LogInformation("👉 GetComfyAgentEvents: {DeviceId} - assigned {Count} new Generation Requests ({GenerationsCount} Generations, {AiTasksCount} AI Tasks):\n{GenerationIds}", 
+                        agent.DeviceId, ret.Results.Count, agentManager.QueuedGenerations.Count, AgentManager.AiTasks.Count, nextGenerations.Map(x => x.Id).Join(", "));
+                    return ret;
+                }
+                generationsCounter = AgentManager.GenerationRequest;
+            }
+
+            // Check for any pending AI Tasks for this device
+            if (aiTasksCounter != AgentManager.AiTaskRequest && spareCapacity > 0)
+            {
+                var nextAiTasks = AgentManager.GetNextAiTasks(agent, userId, take: spareCapacity);
+                if (nextAiTasks.Length > 0)
+                {
+                    ret.Results.AddRange(nextAiTasks);
+                    log.LogInformation("👉 GetComfyAgentEvents: {DeviceId} - assigned {Count} new AI Tasks ({GenerationsCount} Generations, {AiTasksCount} AI Tasks)", 
+                        agent.DeviceId, ret.Results.Count, agentManager.QueuedGenerations.Count, AgentManager.AiTasks.Count);
+                    return ret;
+                }
+                aiTasksCounter = AgentManager.AiTaskRequest;
             }
 
             // Check if they've reported a lower queue count
             spareCapacity = MaxAgentQueueCount - agent.QueueCount;
 
             // Return empty response to agent if we've been waiting for too long
-            if (DateTime.UtcNow - startedAt > TimeSpan.FromSeconds(waitForSecs))
+            if (DateTime.UtcNow - startedAt > waitFor)
+            {
+                var olderThan5Minutes = DateTime.UtcNow.AddMinutes(-5);
+                var pendingGenerationsForDevice = Db.Select(Db.From<WorkflowGeneration>()
+                    .Where(x => x.Result == null && x.Error == null && x.DeletedDate == null 
+                        && x.DeviceId == agent.DeviceId && x.ModifiedDate < olderThan5Minutes)
+                    .OrderBy(x => x.CreatedDate));
+
+                if (pendingGenerationsForDevice.Count > 0)
+                {
+                    ret.Results.AddRange(pendingGenerationsForDevice.Map(x => x.ToExecWorkflow()));
+                    log.LogInformation("👉 GetComfyAgentEvents: Agent {DeviceId} has {Count} pending generations older than 5 minutes", 
+                        agent.DeviceId, pendingGenerationsForDevice.Count);
+                    return ret;
+                }
+                
+                log.LogInformation("👉 GetComfyAgentEvents: {DeviceId} 📬 {QueueCount} - timed out ({GenerationsCount} Generations, {AiTasksCount} AI Tasks)", 
+                    agent.DeviceId, agent.QueueCount, agentManager.QueuedGenerations.Count, AgentManager.AiTasks.Count);
                 return ret;
-            
+            }
+
+            // All checks are against in-memory collections so can poll frequently
             await Task.Delay(100);
-        }
-        
-        // Wait for new events for this device
-        var timeRemainingMs = waitForSecs * 1000 - (int) (DateTime.UtcNow - startedAt).TotalMilliseconds;
-        var newAgentEvents = await agentManager.WaitForAgentEventsAsync(db, agent, userId, timeRemainingMs);
-        if (newAgentEvents.Count > 0)
-        {
-            ret.Results.AddRange(newAgentEvents);
-        }
-        
-        return ret;
+            pollCounter++;
+        } while (true);
     }
     
     public object Any(TestGenerations request)
@@ -361,26 +375,35 @@ public class AgentServices(ILogger<AgentServices> log,
 
         appData.RegisterComfyAgent(agent);
         
-        // Reset all pending AI Tasks for this agent
+        // Reset all pending Generations and AI Tasks for this agent
+        var updatedGenerations = db.UpdateOnly(() => new WorkflowGeneration
+        {
+            DeviceId = null,
+            PromptId = null,
+            StatusUpdate = GenerationStatus.InAgentsPool,
+        }, where: x => x.DeviceId == request.DeviceId && 
+            (x.Result == null && x.Error == null && x.DeletedDate == null));
+        
         using var dbTasks = appData.OpenAiTaskDb();
-        var updated = dbTasks.UpdateOnly(() => new OllamaGenerateTask
+        var updatedTasks = dbTasks.UpdateOnly(() => new OllamaGenerateTask
         {
             State = TaskState.Queued,
             DeviceId = null,
             UserId = null,
         }, where: x => x.DeviceId == request.DeviceId && 
             (x.State == TaskState.Assigned || x.State == TaskState.Started));
-        updated += dbTasks.UpdateOnly(() => new OpenAiChatTask
+        updatedTasks += dbTasks.UpdateOnly(() => new OpenAiChatTask
         {
             State = TaskState.Queued,
             DeviceId = null,
             UserId = null,
         }, where: x => x.DeviceId == request.DeviceId && 
             (x.State == TaskState.Assigned || x.State == TaskState.Started));
+
         // If any tasks were updated, reload the agent events queue
-        if (updated > 0)
+        if (updatedGenerations > 0 || updatedTasks > 0)
         {
-            agentManager.Reload();
+            AgentManager.Reload(db);
         }
         
         var ret = new RegisterComfyAgentResponse
@@ -450,6 +473,8 @@ public class AgentServices(ILogger<AgentServices> log,
                 log.LogInformation("Upload FileNames: {FileNames}", allFileNames.Join(", "));
                 log.LogInformation("Output FileNames: {FileNames}", result.Assets.Map(x => x.FileName).Join(", "));
 
+                string? versionName = null;
+                
                 for (var i = 0; i < Request!.Files.Length; i++)
                 {
                     var file = Request!.Files[i];
@@ -491,6 +516,28 @@ public class AgentServices(ILogger<AgentServices> log,
                             asset.Width = bitmap.Width;
                             asset.Height = bitmap.Height;
                         }
+                        
+                        int? variantId = null;
+                        string? variantName = null;
+
+                        // If input is a SHA256 hash, check 
+                        if (generation.Inputs?.Count > 0)
+                        {
+                            var hashes = generation.Inputs.Map(x => x.WithoutExtension())
+                                .Where(x => x.Length == 64)
+                                .ToList();
+                            if (hashes.Count > 0)
+                            {
+                                variantId = await Db.ScalarAsync<int?>(
+                                    Db.From<Artifact>().Where(x => x.Hash == hashes[0])
+                                        .Select(x => new { x.Id }));
+                                
+                                versionName ??= await Db.ScalarAsync<string?>(Db.From<WorkflowVersion>()
+                                    .Where(x => x.Id == generation.VersionId)
+                                    .Select(x => new { x.Name }));
+                                variantName = versionName;
+                            }
+                        }
 
                         artifacts.Add(new()
                         {
@@ -516,6 +563,8 @@ public class AgentServices(ILogger<AgentServices> log,
                             Objects = asset.Objects,
                             Phash = asset.Phash,
                             Color = asset.Color,
+                            VariantId = variantId,
+                            VariantName = variantName,
                             CreatedBy = userId,
                             CreatedDate = now,
                             ModifiedBy = userId,
@@ -591,7 +640,7 @@ public class AgentServices(ILogger<AgentServices> log,
             }, where: x => x.Id == request.Id);
         }
         
-        agentManager.SignalGenerationUpdated();
+        AgentManager.SignalGenerationUpdated();
         
         return new EmptyResponse();
     }

@@ -11,7 +11,7 @@ public interface IComfyWorkflowConverter
     Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, string? clientId=null);
 }
 
-public record class ApiPromptResult(ApiPrompt ApiPrompt, Dictionary<string, object?> Workflow);
+public record class ApiPromptResult(ApiPrompt ApiPrompt, Dictionary<string, object?> Workflow, string apiPromptJson);
 
 public class CSharpComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> log, AppData appData) : IComfyWorkflowConverter
 {
@@ -25,7 +25,7 @@ public class CSharpComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> 
             workflow = result.Result;
         }
         var apiPrompt = CreateApiPrompt(workflow, args, clientId);
-        return Task.FromResult(new ApiPromptResult(apiPrompt, workflow));
+        return Task.FromResult(new ApiPromptResult(apiPrompt, workflow, apiPrompt.ToJson()));
     }
 
     public ApiPrompt CreateApiPrompt(Dictionary<string, object?> workflow, Dictionary<string,object?> args, string? clientId=null) 
@@ -35,6 +35,45 @@ public class CSharpComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> 
         var nodeDefs = appData.GetSupportedNodeDefinitions(requiredNodes, requiredAssets);
         var apiPrompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflow, nodeDefs, clientId, log:log);
         return apiPrompt;
+    }
+}
+
+/// <summary>
+/// Creates an API Prompt from the existing API Prompt stored in the database for the workflow version.
+/// </summary>
+/// <param name="log"></param>
+/// <param name="appData"></param>
+public class CSharpPromptComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> log, AppData appData) : IComfyWorkflowConverter
+{
+    public Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, string? clientId = null)
+    {
+        var workflow = workflowVersion.Workflow;
+        var workflowInfo = workflowVersion.Info;
+        var prompt = workflowVersion.ApiPrompt
+            ?? throw new Exception($"API Prompt not found for workflow version {workflowVersion.Id}");
+        if (args.Count > 0)
+        {
+            var result = ComfyWorkflowParser.MergeWorkflow(workflow, args, workflowInfo, log);
+            workflow = result.Result;
+            prompt = ComfyConverters.CreatePrompt(prompt, workflowInfo, args, log);
+        }
+        
+        clientId ??= Guid.NewGuid().ToString("N");
+        var apiPrompt = new ApiPrompt
+        {
+            ClientId = clientId,
+            Prompt = prompt,
+            ExtraData = new()
+            {
+                ["extra_pnginfo"] = new Dictionary<string, object?>
+                {
+                    ["workflow"] = workflow
+                },
+                ["client_id"] = clientId,
+            }
+        };
+        
+        return Task.FromResult(new ApiPromptResult(apiPrompt, workflow, prompt.ToJson()));
     }
 }
 
@@ -92,6 +131,6 @@ public class NodeComfyWorkflowConverter(ILogger<NodeComfyWorkflowConverter> log,
             }
         };
         
-        return new ApiPromptResult(apiPrompt, workflow);
+        return new ApiPromptResult(apiPrompt, workflow, promptJson);
     }
 }

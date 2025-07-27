@@ -2,7 +2,7 @@ import { ref, computed, onMounted, inject, watch, onUnmounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useClient, useAuth } from "@servicestack/vue"
 import { QueryArtifacts, SubmitArtifactModeration, RequeueGeneration } from "dtos.mjs"
-import { AllCategories, reactionCounts, formatRating} from "./lib/utils.mjs"
+import { AllCategories, reactionCounts, formatRating, getHDClass} from "./lib/utils.mjs"
 import RatingsDialog from "./components/RatingsDialog.mjs"
 import VisibilityIcon from "./components/VisibilityIcon.mjs"
 import ArtifactMenu from "./components/ArtifactMenu.mjs"
@@ -104,6 +104,7 @@ export default {
                             <option value="-modifiedDate">Recently Modified</option>
                             <option value="-width">Landscape First</option>
                             <option value="-height">Portrait First</option>
+                            <option value="-resolution">Resolution</option>
                         </select>
                     </div>
                 </div>
@@ -198,7 +199,10 @@ export default {
                     >
                         <div class="relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 bg-gray-100 dark:bg-gray-800" 
                             title="Ctrl+Click to View Post" @click.ctrl.prevent="$router.push({ path:'/generations/' + image.generationId })">
-                            <div v-if="store.isAdmin && image.rating" class="absolute top-1 left-1 flex items-center inline-flex rounded-md bg-gray-200/50 dark:bg-gray-700/50 px-1 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-700/10">
+                            <div v-if="getHDClass(image.width, image.height)" class="absolute top-1 left-1 flex items-center inline-flex rounded-sm bg-gray-200/50 dark:bg-gray-700/50 px-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-700/10">
+                              {{getHDClass(image.width, image.height)}}
+                            </div>
+                            <div v-if="store.isAdmin && image.rating" class="absolute bottom-9 right-1 flex items-center inline-flex rounded-sm bg-gray-200/50 dark:bg-gray-700/50 px-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-700/10">
                                 {{formatRating(image.rating)}}
                             </div>
                             <ArtifactImage
@@ -230,7 +234,7 @@ export default {
                                 <div class="mb-1.5 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 w-full">
                                     <div class="p-2 flex items-center justify-between">
                                         <div>
-                                            <p class="text-sm font-medium">{{ image.width }} × {{ image.height }}</p>
+                                            <p class="text-sm font-medium truncate">{{ image.width }} × {{ image.height }}</p>
                                             <p v-if="image.rating" class="text-xs opacity-75">{{ formatRating(image.rating) }}</p>
                                         </div>
                                         <div>
@@ -238,7 +242,7 @@ export default {
                                                 <svg class="size-4 mr-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none"><path fill="currentColor" d="M11.5 13.8h-1.063c-1.53 0-2.294 0-2.583-.497s.088-1.162.844-2.491l2.367-4.167c.375-.66.563-.99.749-.94c.186.049.186.428.186 1.187V9.7c0 .236 0 .354.073.427s.191.073.427.073h1.063c1.53 0 2.294 0 2.583.497s-.088 1.162-.844 2.491l-2.367 4.167c-.375.66-.563.99-.749.94C12 18.247 12 17.868 12 17.109V14.3c0-.236 0-.354-.073-.427s-.191-.073-.427-.073"></path><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"></circle></g></svg>
                                                 {{image.credits}}
                                             </p>
-                                            <p v-if="image.workflowId" class="text-sm">
+                                            <p v-if="image.workflowId" class="text-sm truncate">
                                                 {{store.workflows.find(x => x.id === image.workflowId)?.name}}
                                             </p>
                                         </div>
@@ -834,6 +838,7 @@ export default {
             deleteImage,
             handleRatingChange,
             debounceSearch,
+            getHDClass,
         }
     }
 }

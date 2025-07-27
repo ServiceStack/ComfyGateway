@@ -12,7 +12,7 @@ public record ArtifactInfo(int ArtifactId, string GenerationId, string? Phash, s
 public class ArtifactServices(
     ILogger<ArtifactServices> log, 
     AppData appData, 
-    AgentEventsManager agentEvents) : Service
+    AgentEventsManager agentManager) : Service
 {
     public async Task<object> Get(QueryArtifacts request)
     {
@@ -131,6 +131,26 @@ public class ArtifactServices(
             Results = artifacts
         };
     }
+    
+    public async Task<object> Get(GetArtifactVariants request)
+    {
+        var artifactIds = request.ArtifactIds ?? Db.Column<int>(Db.From<Artifact>()
+            .Where(x => x.GenerationId == request.GenerationId)
+            .Select(x => x.Id));
+
+        if (artifactIds.Count == 0)
+        {
+            return new QueryResponse<Artifact> { Results = [] };
+        }
+        
+        var variantArtifacts = await Db.SelectAsync<Artifact>(x => 
+            x.VariantId != null && artifactIds.Contains(x.VariantId.Value));
+
+        return new QueryResponse<Artifact>
+        {
+            Results = variantArtifacts
+        };
+    }
 
     public object Any(PublishGeneration request)
     {
@@ -172,8 +192,8 @@ public class ArtifactServices(
                 Db.InsertArtifactTags(artifact, appData);
             }
 
-            agentEvents.AddCaptionArtifactTask(dbTasks, artifact, userId);
-            agentEvents.AddDescribeArtifactTask(dbTasks, artifact, userId);
+            agentManager.AddCaptionArtifactTask(dbTasks, artifact, userId);
+            agentManager.AddDescribeArtifactTask(dbTasks, artifact, userId);
         }
         
         return new EmptyResponse();

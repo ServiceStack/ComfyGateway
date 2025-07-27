@@ -22,6 +22,8 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     public string ContentRootPath => env.ContentRootPath;
     public string WebRootPath => env.ContentRootPath.CombineWith("wwwroot");
     public string WorkflowsPath => WebRootPath.CombineWith("data", "workflows");
+    public string WorkflowApiPromptsPath => WebRootPath.CombineWith("data", "api-prompts");
+    public string WorkflowInfosPath => WebRootPath.CombineWith("data", "infos");
     public ComfyMetadata Metadata { get; } = metadata;
     public HashSet<string> DefaultGatewayNodes { get; set; } = new();
 
@@ -93,6 +95,12 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         var fileName = await AssetManager.SaveFileAsync(uploadedFile, appConfig.ArtifactsPath);
         return fileName;
     }
+    
+    public async Task<string> SaveUploadedFileAsync(IHttpFile uploadedFile)
+    {
+        var fileName = await AssetManager.SaveFileAsync(uploadedFile, appConfig.FilesPath);
+        return fileName;
+    }
 
     public Stream OpenArtifactStream(string fileName) => File.OpenRead(GetArtifactPath(fileName));
     public string GetArtifactPath(string fileName) => appConfig.ArtifactsPath.CombineWith(fileName[..2], fileName);
@@ -100,7 +108,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
     public string GetDeviceObjectInfoPath(string deviceId) => 
         GetDevicePath(deviceId).CombineWith("object_info.json");
     public string GetDevicePath(string deviceId) => 
-        appConfig.ArtifactsPath.CombineWith(deviceId.GetDevicePath());
+        appConfig.AppDataPath.CombineWith(deviceId.GetDevicePath());
     
     ServerEvent RegisterEvent = new() { Event = "register" };
     ServerEvent HeartbeatEvent = new() { Event = "heartbeat", Data = "pulse" };
@@ -287,21 +295,11 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
             log.LogError(e, "Failed to parse workflow JSON: {WorkflowPath}", workflowName);
             return null;
         }
-        
-        if (ret.Workflow["nodes"] is not List<object> nodesObj)
-        {
-            if (rethrow)
-                throw new Exception("No nodes found in workflow JSON");
-            log.LogError("No nodes found in workflow JSON");
-            return null;
-        }
 
         try
         {
-            var nodes = nodesObj.Map(x => ((Dictionary<string, object>)x)["type"].ToString()!).Distinct().OrderBy(x => x).ToList();
-            var nonDefaultNodes = nodes.Where(x => !DefaultGatewayNodes.Contains(x)).ToList();
-            ret.Nodes = nonDefaultNodes;
-            ret.Assets = ComfyWorkflowParser.ExtractAssetPaths(ret.Workflow, log).Distinct().OrderBy(x => x).ToList();
+            ret.Nodes = ComfyWorkflowParser.ExtractRequiredNodeTypes(ret.Workflow, DefaultGatewayNodes, log).OrderBy(x => x).ToList();
+            ret.Assets = ComfyWorkflowParser.ExtractAssetPaths(ret.Workflow, log).OrderBy(x => x).ToList();
         }
         catch (Exception e)
         {

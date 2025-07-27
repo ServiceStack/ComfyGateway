@@ -173,7 +173,7 @@ const UploadWorkflowForm = {
                     </button>
                     <button
                         type="submit"
-                        :disabled="uploading || !hasFile || successMessage"
+                        :disabled="uploading || !hasFile || successMessage !== ''"
                         class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <span v-if="uploading" class="flex items-center">
@@ -390,9 +390,7 @@ export default {
     },
     template: `
     <!-- Workflow selection area with transition -->
-    <div v-show="show" class="p-4 w-full overflow-hidden"
-         style="opacity: 1; transform: translateY(0);"
-         :style="show ? {} : {maxHeight: '0px', opacity: '0', transform: 'translateY(-20px)'}">
+    <div v-show="show" class="p-4 w-full overflow-hidden">
 
         <div class="flex justify-between mb-4">
           <div class="flex">
@@ -481,6 +479,7 @@ export default {
             <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 <div v-for="workflow in filteredWorkflows"
                      :key="workflow.version.id"
+                     :title="workflowTitle(workflow)"
                      @click="selectWorkflow(workflow)"
                      class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer border border-gray-200 dark:border-gray-700 group flex flex-col justify-between overflow-hidden"
                      :class="store.compatibleDevices(workflow.version, runOnDevices).length 
@@ -494,7 +493,7 @@ export default {
                              :src="workflow.version.posterImage"
                              :alt="workflow.version.name"
                              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
-                        <div v-else style2="aspect-ratio: 1/2;" 
+                        <div v-else 
                             class="aspect-square w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
                             <svg class="w-16 h-16" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
@@ -504,9 +503,8 @@ export default {
 
                     <div class="relative">
                         <!-- Title -->
-                        <h3 :title="workflowTitle(workflow)"
-                            class="absolute -mt-7 text-center w-full p-1 bg-gray-900/50 font-semibold text-gray-900 dark:text-gray-100 text-sm mb-2 line-clamp-2">
-                            {{ workflow.version.name }}
+                        <h3 class="absolute -mt-7 text-center w-full p-1 bg-gray-900/50 font-semibold text-gray-900 dark:text-gray-100 text-sm mb-2 line-clamp-2">
+                            <span class="truncate" :title="workflow.version.name">{{ workflow.version.name }}</span>
                             <span v-if="workflow.version.version !== 'v1'" class="text-xs text-gray-500 dark:text-gray-400">({{ workflow.version.version }})</span>
                         </h3>
 

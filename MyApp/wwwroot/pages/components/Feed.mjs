@@ -1,6 +1,6 @@
 import { ref, computed, watch, inject, onMounted, onUnmounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { useAuth } from "@servicestack/vue"
+import {useAuth, useUtils} from "@servicestack/vue"
 import { ArtifactGallery, ArtifactDownloads } from "./Artifacts.mjs"
 import { AllRatings, toArtifacts, formatDuration, formatRating, sortByCreatedDesc, sortByCreatedAsc, sortByModifiedDesc, sortByModifiedAsc } from "../lib/utils.mjs"
 
@@ -171,7 +171,7 @@ export default {
                 </div>
                 <div v-else class="py-12 flex justify-center">
                     <Loading imageClass="size-10 mr-3" class="p-2 px-4 rounded-lg dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 shadow-md">
-                        <div class="text-lg text-gray-500">Executing Workflow...</div>
+                        <div class="text-lg text-gray-500" :title="'Executing Workflow: ' + gen.id" @click="copyText(gen.id)">Executing Workflow...</div>
                         <div v-if="gen.statusUpdate" class="text-sm text-gray-400">{{gen.statusUpdate}}</div>
                     </Loading>
                 </div>
@@ -209,6 +209,7 @@ export default {
         const refBottom = ref()
         const regeneratingIdMap = ref({})
         let intersectionObserver = null
+        const { copyText } = useUtils()
 
         // Initialize filter from query parameter, default to 'all' if invalid
         const validFilters = ['all', 'pending', 'unpublished', 'published', 'failed']
@@ -448,6 +449,7 @@ export default {
             publishingGeneration,
             handleDragStart,
             loadMoreGenerations,
+            copyText,
         }
     }
 }

@@ -66,11 +66,20 @@
       <Folder Include="App_Data\artifacts\" />
       <Folder Include="App_Data\files\" />
       <Folder Include="src\utils\" />
+      <Folder Include="wwwroot\data\api-prompts\" />
+      <Folder Include="wwwroot\data\api-prompts\Image to Image\SDXL\" />
+      <Folder Include="wwwroot\data\infos\" />
     </ItemGroup>
 
     <ItemGroup>
       <_ContentIncludedByDefault Remove="wwwroot\data\workflows\Text to Image\SD 1.5\Basic.json" />
       <_ContentIncludedByDefault Remove="wwwroot\data\workflows\Text to Image\NoobAI\Smooth Workflow v3.v1.json" />
+      <_ContentIncludedByDefault Remove="wwwroot\data\api-prompts\Audio to Text\Whisper\Transcribe Audio.v1.json" />
+      <_ContentIncludedByDefault Remove="wwwroot\data\api-prompts\Image to Text\Florence2\Describe Image.v1.json" />
+      <_ContentIncludedByDefault Remove="wwwroot\data\api-prompts\Text to Audio\Stable Audio\Generate Audio.v1.json" />
+      <_ContentIncludedByDefault Remove="wwwroot\data\api-prompts\Video to Text\Whisper\Transcribe Video.v1.json" />
+      <_ContentIncludedByDefault Remove="wwwroot\data\api-prompts\Image to Image\SD 1.5\Simple.v1.json" />
+      <_ContentIncludedByDefault Remove="wwwroot\data\workflows\Image to Image\SD 1.5\Simple.v1.json" />
     </ItemGroup>
 
     <Target Name="tailwind" BeforeTargets="Publish">

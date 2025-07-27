@@ -189,6 +189,18 @@ public class ComfyWorkflowParseTests
     }
 
     [Test]
+    public void Can_parse_wan_Workflow()
+    {
+        var workflowPath = "./workflows/image-to-video/wan.json";
+        var workflowJson = File.ReadAllText(workflowPath);
+        var workflow = ComfyWorkflowParser.Parse(workflowJson.ParseAsObjectDictionary(), workflowPath.LastRightPart('/'), NodeDefs) ?? throw new Exception($"Could not parse {workflowPath}");
+        var inputNames = workflow.Inputs.Map(x => x.Name);
+        Assert.That(inputNames,Is.EquivalentTo(
+            "positivePrompt,negativePrompt,seed,steps,cfg,sampler_name,scheduler,denoise,image".Split(',')));
+        Assert.That(workflow.Type, Is.EqualTo(ComfyWorkflowType.ImageToVideo));
+    }
+
+    [Test]
     public void Can_parse_video2text_Workflow()
     {
         var workflowPath = "./workflows/video-to-text/transcribe-video-whisper.json";
@@ -198,5 +210,24 @@ public class ComfyWorkflowParseTests
         workflow.PrintDump();
         Assert.That(workflow.Type, Is.EqualTo(ComfyWorkflowType.VideoToText));
         Assert.That(inputNames,Is.EquivalentTo("video".Split(',')));
+    }
+
+    [Test]
+    public void Can_parse_4xUpscaler()
+    {
+        var workflowPath = "./workflows/image-to-image/4x_upscaler.json";
+        var workflowJson = File.ReadAllText(workflowPath);
+        var workflow = ComfyWorkflowParser.Parse(workflowJson.ParseAsObjectDictionary(), workflowPath.LastRightPart('/'), NodeDefs) ?? throw new Exception($"Could not parse {workflowPath}");
+        var inputNames = workflow.Inputs.Map(x => x.Name);
+        workflow.PrintDump();
+        Assert.That(workflow.Type, Is.EqualTo(ComfyWorkflowType.ImageToImage));
+        Assert.That(inputNames,Is.EquivalentTo(new[]{ "positivePrompt", "negativePrompt", "image" }));
+        
+        var imageInput = workflow.Inputs.First(x => x.Name == "image");
+        Assert.That(imageInput.Type, Is.EqualTo(ComfyInputType.Image));
+        Assert.That(imageInput.Upload, Is.True);
+
+        Assert.That(workflow.CustomNodes, Is.EquivalentTo(new[] { "ssitu/ComfyUI_UltimateSDUpscale" }));
+        Assert.That(workflow.PipPackages, Is.EquivalentTo(new[] { "servicestack" }));
     }
 }

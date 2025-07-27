@@ -20,7 +20,8 @@ public class ComfyServices(ILogger<ComfyServices> log,
     IBackgroundJobs jobs, 
     IDbConnectionFactory dbFactory,
     AgentEventsManager agentManager,
-    IComfyWorkflowConverter comfyConverter)
+    IComfyWorkflowConverter comfyConverter,
+    NodeComfyWorkflowConverter nodeConverter)
     : Service
 {
     public const string ComfyBaseUrl = "http://localhost:7860/api";
@@ -316,7 +317,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
 
     public async Task<object> Post(RequeueGeneration request)
     {
-        var userId = Request.GetClaimsPrincipal().GetUserId();
+        var userId = Request.GetRequiredUserId();
         log.LogInformation("Received RequeueGeneration from '{UserId}' to execute Generation '{Id}'",
             userId, request.Id);
         
@@ -325,10 +326,20 @@ public class ComfyServices(ILogger<ComfyServices> log,
             throw HttpError.NotFound("Workflow generation could not be found");
             
         log.LogInformation("Re-queueing Workflow generation {GenerationId} for {UserId}", gen.Id, userId);
+        
+        // Reset the generation
+        gen.DeviceId = null;
+        gen.PromptId = null;
+        gen.Error = null;
+        gen.Result = null;
+        gen.Status = null;
+        gen.Outputs = null;
+        gen.ModifiedBy = userId;
+        gen.ModifiedDate = DateTime.UtcNow;
+        gen.StatusUpdate = GenerationStatus.ReAddedToAgentsPool;
 
         // If we're retrying an existing generation we need to regenerate the seeds
-        var genResults = gen.Result;
-        if (genResults?.Assets?.Count > 0 && gen.Args?.Count > 0)
+        if (gen.Args?.Count > 0 && (gen.Args.ContainsKey("seed") || gen.Args.ContainsKey("noise_seed")))
         {
             if (gen.Args.TryGetValue("seed", out var seed))
             {
@@ -340,41 +351,44 @@ public class ComfyServices(ILogger<ComfyServices> log,
             }
             
             var workflowVersion = GetWorkflowVersion(Db, gen.WorkflowId, gen.VersionId);
-            var (apiPrompt, newWorkflow) = await comfyConverter.CreateApiPromptAsync(workflowVersion, gen.Args, gen.Id);
+            var (apiPrompt, newWorkflow, _) = await comfyConverter.CreateApiPromptAsync(workflowVersion, gen.Args, gen.Id);
 
+            gen.Workflow = newWorkflow;
+            gen.ApiPrompt = apiPrompt;
+            
             Db.UpdateOnly(() => new WorkflowGeneration
             {
                 Args = gen.Args,
-                Workflow = newWorkflow,
-                ApiPrompt = apiPrompt,
-                DeviceId = null,
-                PromptId = null,
-                Error = null,
-                Result = null,
-                Status = null,
-                Outputs = null,
-                StatusUpdate = GenerationStatus.ReAddedToAgentsPool,
-                ModifiedBy = userId,
-                ModifiedDate = DateTime.UtcNow,
+                Workflow = gen.Workflow,
+                ApiPrompt = gen.ApiPrompt,
+                DeviceId = gen.DeviceId,
+                PromptId = gen.PromptId,
+                Error = gen.Error,
+                Result = gen.Result,
+                Status = gen.Status,
+                Outputs = gen.Outputs,
+                StatusUpdate = gen.StatusUpdate,
+                ModifiedBy = gen.ModifiedBy,
+                ModifiedDate = gen.ModifiedDate,
             }, where: x => x.Id == request.Id);
         }
         else
         {
             Db.UpdateOnly(() => new WorkflowGeneration
             {
-                DeviceId = null,
-                PromptId = null,
-                Error = null,
-                Result = null,
-                Status = null,
-                Outputs = null,
-                StatusUpdate = GenerationStatus.ReAddedToAgentsPool,
-                ModifiedBy = userId,
-                ModifiedDate = DateTime.UtcNow,
+                DeviceId = gen.DeviceId,
+                PromptId = gen.PromptId,
+                Error = gen.Error,
+                Result = gen.Result,
+                Status = gen.Status,
+                Outputs = gen.Outputs,
+                StatusUpdate = gen.StatusUpdate,
+                ModifiedBy = gen.ModifiedBy,
+                ModifiedDate = gen.ModifiedDate,
             }, where: x => x.Id == request.Id);
         }
         
-        agentManager.SignalGenerationRequest();
+        agentManager.QueueGeneration(gen);
 
         return new RequeueGenerationResponse
         {
@@ -405,12 +419,12 @@ public class ComfyServices(ILogger<ComfyServices> log,
                 
         var clientId = Guid.NewGuid().ToString("N");
         var workflowVersion = GetWorkflowVersion(db, request.WorkflowId, request.VersionId);
-        var (apiPrompt, workflow) = await comfyConverter.CreateApiPromptAsync(workflowVersion, request.Args!, clientId);
+        var (apiPrompt, workflow, _) = await comfyConverter.CreateApiPromptAsync(workflowVersion, request.Args!, clientId);
 
         log.LogInformation("Queueing ComfyUI Workflow for {ClientId}: {ApiPromptJson}", 
             apiPrompt.ClientId, ClientConfig.ToSystemJson(apiPrompt.Prompt));
 
-        var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflowVersion.Workflow, log);
+        var requiredNodes = ComfyWorkflowParser.ExtractRequiredNodeTypes(workflowVersion.Workflow, appData.DefaultGatewayNodes, log);
         var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflowVersion.Workflow, log);
         
         var checkpoint = requiredAssets.FirstOrDefault(x => 
@@ -422,6 +436,50 @@ public class ComfyServices(ILogger<ComfyServices> log,
         var controlNet = requiredAssets.FirstOrDefault(x => x.StartsWith("controlnet/, StringComparison.OrdinalIgnoreCase"));
         var upscaler = requiredAssets.FirstOrDefault(x => x.StartsWith("upscale_models/", StringComparison.OrdinalIgnoreCase));
 
+        List<string>? inputs = null;
+        if (Request!.Files.Length > 0)
+        {
+            for (var i = 0; i < Request.Files.Length; i++)
+            {
+                var file = Request.Files[i];
+                var input = workflowVersion.Info.Inputs.FirstOrDefault(x => x.Name == file.Name);
+                if (input == null)
+                    throw HttpError.BadRequest($"Workflow does not have an '{file.Name}' input");
+
+                var fileName = await appData.SaveUploadedFileAsync(file);
+                inputs ??= [];
+                inputs.Add(fileName);
+                
+                var node = apiPrompt.Prompt[input.NodeId.ToString()];
+                node.Inputs[input.Name] = fileName;
+            }
+        }
+        else
+        {
+            if (request.Args?.TryGetValue("image", out var oFileName) == true && oFileName is string fileName)
+            {
+                var input = workflowVersion.Info.Inputs.FirstOrDefault(x => x.Name == "image");
+                if (input != null)
+                {
+                    var node = apiPrompt.Prompt[input.NodeId.ToString()];
+                    var artifactPath = appData.GetArtifactPath(fileName);
+                    if (!File.Exists(artifactPath))
+                        throw HttpError.NotFound($"Artifact not found: {fileName}");
+                    
+                    var inputPath = appData.Config.FilesPath.CombineWith(fileName[..2], fileName);
+                    Path.GetDirectoryName(inputPath).AssertDir();
+                    if (!File.Exists(inputPath))
+                    {
+                        File.Copy(artifactPath, inputPath);
+                    }
+                    
+                    inputs ??= [];
+                    inputs.Add(fileName);
+                    node.Inputs["image"] = fileName;
+                }
+            }
+        }
+        
         var now = DateTime.UtcNow;
         var generation = new WorkflowGeneration
         {
@@ -440,6 +498,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
             Args = request.Args,
             Workflow = workflow,
             ApiPrompt = apiPrompt,
+            Inputs = inputs,
             RequiredNodes = requiredNodes,
             RequiredAssets = requiredAssets,
             CreatedBy = userId,
@@ -451,7 +510,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
 
         db.Insert(generation);
         
-        agentManager.SignalGenerationRequest();
+        agentManager.QueueGeneration(generation);
 
         return new QueueWorkflowResponse
         {
@@ -847,28 +906,43 @@ public class ComfyServices(ILogger<ComfyServices> log,
         var now = DateTime.UtcNow;
         var userId = Request.GetRequiredUserId();
         
-        var workflowVersion = db.SingleById<WorkflowVersion>(request.VersionId);
+        var version = db.SingleById<WorkflowVersion>(request.VersionId);
         if (Request.Files.Length == 0)
             throw HttpError.BadRequest("No file uploaded");
 
         var workflowJson = await Request.Files[0].InputStream.ReadToEndAsync();
-        var workflow = db.SingleById<Workflow>(workflowVersion.ParentId);
+        var workflow = db.SingleById<Workflow>(version.ParentId);
 
-        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, workflowVersion.Name, workflow.Base, workflowVersion.Version)
+        var parsedWorkflow = appData.TryParseWorkflow(workflowJson, version.Name, workflow.Base, version.Version)
             ?? throw HttpError.BadRequest("Failed to parse workflow");
         
-        var saveToPath = appData.WorkflowsPath.CombineWith(workflowVersion.Path);
+        var saveToPath = appData.WorkflowsPath.CombineWith(version.Path);
         Path.GetDirectoryName(saveToPath).AssertDir();
         await File.WriteAllTextAsync(saveToPath, workflowJson);
+        
+        var clientId = version.Workflow.TryGetValue("Id", out var oId) && oId is string id
+            ? id
+            : Guid.NewGuid().ToString("N");
+        var (apiPrompt, _, promptJson) = await nodeConverter.CreateApiPromptAsync(version, new(), clientId);
+        version.ApiPrompt = apiPrompt.Prompt;
         
         var updated = await db.UpdateOnlyAsync(() => new WorkflowVersion {
             Workflow = parsedWorkflow.Workflow,
             Info = parsedWorkflow.Info,
+            ApiPrompt = version.ApiPrompt,
             Nodes = parsedWorkflow.Nodes,
             Assets = parsedWorkflow.Assets,
             ModifiedBy = userId,
             ModifiedDate = now,
         }, where:x => x.Id == request.VersionId);
+
+        var infoPath = appData.WorkflowInfosPath.CombineWith(version.Path);
+        Path.GetDirectoryName(infoPath).AssertDir();
+        await File.WriteAllTextAsync(infoPath, parsedWorkflow.Info.ToJson());
+
+        var apiPromptPath = appData.WorkflowApiPromptsPath.CombineWith(version.Path);
+        Path.GetDirectoryName(apiPromptPath).AssertDir();
+        await File.WriteAllTextAsync(apiPromptPath, promptJson);
 
         return new UpdateWorkflowVersionResponse
         {
@@ -909,28 +983,41 @@ public class ComfyServices(ILogger<ComfyServices> log,
                 var workflowJson = await File.ReadAllTextAsync(appData.WorkflowsPath.CombineWith(version.Path));
 
                 var parsedWorkflow = appData.ParseWorkflow(workflowJson, version.Name, workflow.Base, version.Version);
+                version.Workflow = parsedWorkflow.Workflow;
+                version.Info = parsedWorkflow.Info;
+                version.Nodes = parsedWorkflow.Nodes;
+                version.Assets = parsedWorkflow.Assets;
 
                 var clientId = version.Workflow.TryGetValue("Id", out var oId) && oId is string id
                     ? id
                     : Guid.NewGuid().ToString("N");
-                var (apiPrompt, _) = await comfyConverter.CreateApiPromptAsync(version, new(), clientId);
+
+                var (apiPrompt, _, promptJson) = await nodeConverter.CreateApiPromptAsync(version, new(), clientId);
                 version.ApiPrompt = apiPrompt.Prompt;
                 
                 await db.UpdateOnlyAsync(() => new WorkflowVersion {
-                    Workflow = parsedWorkflow.Workflow,
-                    Info = parsedWorkflow.Info,
+                    Workflow = version.Workflow,
+                    Info = version.Info,
                     ApiPrompt = version.ApiPrompt,
-                    Nodes = parsedWorkflow.Nodes,
-                    Assets = parsedWorkflow.Assets,
+                    Nodes = version.Nodes,
+                    Assets = version.Assets,
                     ModifiedBy = userId,
                     ModifiedDate = now,
                 }, where:x => x.Id == version.Id);
+
+                var infoPath = appData.WorkflowInfosPath.CombineWith(version.Path);
+                Path.GetDirectoryName(infoPath).AssertDir();
+                await File.WriteAllTextAsync(infoPath, parsedWorkflow.Info.ToJson());
+
+                var apiPromptPath = appData.WorkflowApiPromptsPath.CombineWith(version.Path);
+                Path.GetDirectoryName(apiPromptPath).AssertDir();
+                await File.WriteAllTextAsync(apiPromptPath, promptJson);
                 
                 ret.Results.Add($"Workflow {version.Id} updated with {parsedWorkflow.Nodes.Count} nodes and {parsedWorkflow.Assets.Count} assets");
             }
             catch (Exception e)
             {
-                ret.Results.Add($"Failed to parse {version.Path}");
+                ret.Results.Add($"Failed to parse {version.Path}: {e.Message}");
             }
         }
 

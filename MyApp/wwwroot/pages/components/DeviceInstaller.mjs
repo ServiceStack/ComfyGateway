@@ -195,12 +195,12 @@ export default {
                   <div v-else class="space-y-2 max-h-64 overflow-y-auto">
                     <div v-for="node in requiredNodes" :key="node"
                          class="flex items-center justify-between p-3 rounded-lg border gap-x-2"
-                         :class="installedNodes.includes(node)
+                         :class="installedNodes.includes(node) || installed[node]
                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
                            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'">
                       <div class="flex items-center gap-3">
                         <div class="w-2 h-2 rounded-full"
-                             :class="installedNodes.includes(node) ? 'bg-green-500' : 'bg-red-500'"></div>
+                             :class="installedNodes.includes(node) || installed[node] ? 'bg-green-500' : 'bg-red-500'"></div>
                         <div class="flex flex-col">
                           <span class="text-sm font-mono text-gray-900 dark:text-gray-100">{{ node }}</span>
                           <span v-if="matchingNodes[node]"
@@ -242,7 +242,7 @@ export default {
                           Manual Install
                         </button>
                       </div>
-                      <div v-if="!installedNodes.includes(node) && showNodeInstall === node"
+                      <div v-if="!(installedNodes.includes(node) || installed[node]) && showNodeInstall === node"
                            class="flex flex-grow gap-x-2 items-center justify-end">
                         <div v-if="!installing[node] && !queued[node]" class="w-full max-w-sm">
                           <TextInput id="nodeUrl" type="text" v-model="nodeUrl" label=""
@@ -550,6 +550,9 @@ export default {
                         status.value = !api.response.status || api.response.status.startsWith('Registered')
                             ? getStatus()
                             : api.response.status
+                    }
+                    if (api.response.error) {
+                        error.value = api.response.error
                     }
                     
                     const assetKeys = new Set()

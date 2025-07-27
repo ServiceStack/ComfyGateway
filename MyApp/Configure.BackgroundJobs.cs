@@ -63,7 +63,7 @@ public class JobsHostedService(ILogger<JobsHostedService> log, IBackgroundJobs j
     {
         await jobs.StartAsync(stoppingToken);
         
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(13));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
             await jobs.TickAsync();

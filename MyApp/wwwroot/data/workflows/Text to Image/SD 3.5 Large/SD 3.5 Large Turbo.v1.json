@@ -233,7 +233,7 @@
     },
     {
       "id": 302,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         605.5421142578125,
         383.8533630371094
@@ -286,7 +286,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_g.safetensors",
@@ -297,7 +297,7 @@
     },
     {
       "id": 303,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         292.1364440917969,
         383.8533630371094
@@ -350,7 +350,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/blob/main/text_encoders/clip_l.safetensors",
@@ -427,7 +427,7 @@
     },
     {
       "id": 304,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         605.5421142578125,
         191.13002014160156
@@ -480,7 +480,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/t5xxl_fp16.safetensors",
@@ -491,7 +491,7 @@
     },
     {
       "id": 301,
-      "type": "AssetDownloader",
+      "type": "RequiresAsset",
       "pos": [
         292.1364440917969,
         192.9066162109375
@@ -544,7 +544,7 @@
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "AssetDownloader"
+        "Node name for S&R": "RequiresAsset"
       },
       "widgets_values": [
         "https://huggingface.co/stabilityai/stable-diffusion-3.5-large-turbo/resolve/main/sd3.5_large_turbo.safetensors",
@@ -787,8 +787,8 @@
         "Node name for S&R": "EmptySD3LatentImage"
       },
       "widgets_values": [
-        3424,
-        1024,
+        768,
+        1344,
         1
       ]
     },
@@ -957,7 +957,7 @@
         "Node name for S&R": "CLIPTextEncode"
       },
       "widgets_values": [
-        "low quality, blurry, noisy, compression artifacts"
+        "low quality, blurry, noisy, compression artifacts, text, letters, writing, typography, words, typography, signature, watermark, logo, label"
       ],
       "color": "#322",
       "bgcolor": "#533"

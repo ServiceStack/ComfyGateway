@@ -1,6 +1,6 @@
 import { ref, onMounted, watch, toRaw, inject } from "vue"
 import { useRouter, useRoute } from "vue-router"
-import { ApiResult, indexOfAny } from "@servicestack/client"
+import { ApiResult, indexOfAny, JSV } from "@servicestack/client"
 import { useClient, useFormatters } from "@servicestack/vue"
 import {
     QueueWorkflow, WaitForMyWorkflowGenerations, MyWorkflowGenerations, RequeueGeneration
@@ -45,7 +45,7 @@ export default {
                 <button type="button" @click="selectedWorkflow=null">change</button>
             </span>
         </div>
-        <WorkflowPrompt
+        <WorkflowPrompt ref="refPrompt"
             :selectedWorkflow="selectedWorkflow"
             :selectedWorkflowInfo="selectedWorkflowInfo"
             :workflowArgs="workflowArgs"
@@ -128,6 +128,7 @@ export default {
         const selectedWorkflowInfo = ref(null)
         const selectedVersionId = ref(null)
         const workflowArgs = ref({})
+        const refPrompt = ref()
         const refTop = ref()
         const refBottom = ref()
         const apiRunning = ref(new ApiResult())
@@ -297,7 +298,7 @@ export default {
             }
             
             runError.value = null
-            console.log('Running workflow:', workflow.path)
+            console.log('Running workflow:', workflow.name, refPrompt.value?.refForm)
             const positivePrompt = workflowArgs.value.positivePrompt
             console.log('Prompt text:', positivePrompt)
 
@@ -308,6 +309,12 @@ export default {
             }, 2000) // Hide after 2 seconds (matches animation duration)
 
             regenSeedsIfNeeded()
+
+            ;['image','video','audio'].forEach(inputName => {
+                if (route.query[inputName]) {
+                    workflowArgs.value[inputName] = route.query[inputName]
+                }
+            })
 
             const versionId = Number(selectedVersionId.value)
             let threadId = Number(route.params.id)
@@ -346,7 +353,34 @@ export default {
             if (threadId !== Number(route.params.id)) {
                 router.push({ path:'/generate/feed/' + threadId, query: route.query })
             }
-
+            
+            if (!refPrompt.value?.refForm) {
+                console.error('Failed to find prompt form')
+                return
+            }
+            
+            const formData = new FormData(refPrompt.value?.refForm)
+            
+            // Log all items in formData with their type:
+            for (const [name, value] of formData.entries()) {
+                // Check if value is File or Blob
+                if (value instanceof File || value instanceof Blob) {
+                    console.log(`formData[${name}] = ${value.name} (${value.type})`)
+                } else {
+                    formData.delete(name)
+                }
+            }
+            
+            formData.set('description', positivePrompt)
+            formData.set('workflowId', workflow.id)
+            formData.set('versionId', versionId)
+            formData.set('threadId', threadId)
+            formData.set('args', JSV.stringify(Object.assign({}, toRaw(workflowArgs.value))))
+            // console.log('formData', [...formData.entries()])
+            
+            const api = await client.apiForm(new QueueWorkflow(), formData)
+            
+            /*
             const request = new QueueWorkflow({
                 description: positivePrompt,
                 workflowId: workflow.id,
@@ -356,12 +390,24 @@ export default {
             })
             console.log('QueueWorkflow', request)
             const api = await client.api(request)
+            */
 
             store.selectWorkflow(args)
             await store.loadMyGenerations()
 
             console.log('startCheckingForUpdates.runWorkflow()')
             startCheckingForUpdates()
+
+            let argsRemoved = false
+            for (const inputName of ['image','video','audio']) {
+                if (route.query[inputName]) {
+                    delete workflowArgs.value[inputName]
+                    argsRemoved = true
+                }
+            }
+            if (argsRemoved) {
+                router.push({ path:'/generate/feed/' + threadId })
+            }
         }
 
         function startCheckingForUpdates(timeout=0) {
@@ -424,6 +470,7 @@ export default {
             selectedWorkflowInfo,
             workflowArgs,
             runError,
+            refPrompt,
             refTop,
             refBottom,
             showRecents,

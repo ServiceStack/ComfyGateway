@@ -82,6 +82,9 @@ public class DeviceServices(ILogger<DeviceServices> log, AppData appData, AgentE
             Db.UpdateOnly(() => new ComfyAgent {
                 RequirePip = agent.RequirePip,
                 Status = agent.Status,
+                Downloading = null,
+                Downloaded = null,
+                DownloadFailed = null,
                 ModifiedDate = agent.ModifiedDate,
             }, where: x => x.DeviceId == agent.DeviceId);
         }
@@ -113,6 +116,9 @@ public class DeviceServices(ILogger<DeviceServices> log, AppData appData, AgentE
             Db.UpdateOnly(() => new ComfyAgent {
                 RequireNodes = agent.RequireNodes,
                 Status = agent.Status,
+                Downloading = null,
+                Downloaded = null,
+                DownloadFailed = null,
                 ModifiedDate = agent.ModifiedDate,
             }, where: x => x.DeviceId == agent.DeviceId);
         }
@@ -146,6 +152,9 @@ public class DeviceServices(ILogger<DeviceServices> log, AppData appData, AgentE
             Db.UpdateOnly(() => new ComfyAgent {
                 RequireModels = agent.RequireModels,
                 Status = agent.Status,
+                Downloading = null,
+                Downloaded = null,
+                DownloadFailed = null,
                 ModifiedDate = agent.ModifiedDate,
             }, where: x => x.DeviceId == agent.DeviceId);
         }
