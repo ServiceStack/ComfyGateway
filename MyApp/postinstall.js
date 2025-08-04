@@ -12,6 +12,7 @@ const files = {
         'servicestack-client.min.mjs':     '/@servicestack/client@2/dist/servicestack-client.min.mjs',
         'servicestack-vue.mjs':            '/@servicestack/vue@3/dist/servicestack-vue.mjs',
         'servicestack-vue.min.mjs':        '/@servicestack/vue@3/dist/servicestack-vue.min.mjs',
+        'tailwindplus-elements.min.mjs':   'https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1',
     },
     typings: {
         'vue/index.d.ts':                  '/vue@3/dist/vue.d.ts',
