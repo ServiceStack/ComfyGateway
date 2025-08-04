@@ -483,7 +483,7 @@ export default {
                        placeholder="filter models..."
                        class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
               </div>
-              <button class="inline-block" title="Refresh Agent Models" @click="store.agentCommand(device.deviceId, 'Refresh')">
+              <button class="inline-block" title="Refresh Agent Models" @click="installer.agentCommand('Refresh')">
                 <svg class="cursor-pointer size-6 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                   <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9a9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5m-5 4a9 9 0 0 0 9 9a9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></g>
                 </svg>
@@ -598,7 +598,6 @@ export default {
     setup(props) {
         const store = inject('store')
         const installer = inject('installer')
-        const client = useClient()
         
         const searchQuery = ref('')
         const expandedCategories = ref({})

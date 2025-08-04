@@ -1,8 +1,10 @@
 import { computed, inject, ref } from "vue"
-import { PrimaryButton } from "@servicestack/vue";
+
+const requiredPackages = [
+    "servicestack", "onnxruntime", "ultralytics", "supervision", "git+https://github.com/openai/CLIP.git"
+]
 
 export default {
-    components: {PrimaryButton},
     template:`
     <div class="h-full flex flex-col bg-white dark:bg-gray-900">
         <!-- Header -->
@@ -29,7 +31,7 @@ export default {
                 </div>
               </div>
               <form class="flex space-x-2" @submit.prevent="installer.installPackage(newPackage)">
-                <input type="text" v-model="newPackage" placeholder="Enter pip package" 
+                <input type="text" v-model="newPackage" placeholder="Install pip package" 
                        class="w-full px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 <PrimaryButton :disabled="!newPackage || installer.isPackageInstalling(newPackage)"
                                :color="installer.isPackageInstalling(newPackage) ? 'red' : 'indigo'">
@@ -46,13 +48,20 @@ export default {
                 <div v-for="pkg in filteredPackages" :key="pkg" 
                      class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-lg p-4 overflow-hidden">
                   <div class="flex flex-col">
-                    <label class="whitespace-nowrap overflow-hidden text-ellipsis lg:max-w-76" :title="pkg">{{ pkg }}</label>
+                    <label class="whitespace-nowrap overflow-hidden text-ellipsis lg:max-w-76"
+                           :class="requiredPackages.includes(pkg) ? 'text-gray-500 dark:text-gray-400' : ''"
+                           :title="pkg">{{ pkg }}</label>
                   </div>
-                  <button type="button"
+                  <button v-if="requiredPackages.includes(pkg)" type="button" disabled 
+                          title="Comfy Agent required package can't be uninstalled"
+                          class="p-2 ">
+                    <svg class="size-5 text-gray-400 dark:text-gray-500 cursor-not-allowed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2S2 6.477 2 12s4.477 10 10 10m-4.906-3.68L18.32 7.094A8 8 0 0 1 7.094 18.32M5.68 16.906A8 8 0 0 1 16.906 5.68z"/></svg>
+                  </button>
+                  <button v-else type="button"
                     @click="installer.uninstallPackage(pkg)"
                     :disabled="installer.isPackageUninstalling(pkg)"
-                    class="flex-shrink-0 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    :title="installer.isPackageUninstalling(pkg) ? 'Uninstalling...' : 'Uninstall pip package'"
+                    class="flex-shrink-0 p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :title="installer.isPackageUninstalling(pkg) ? 'Uninstalling...' : 'Uninstall &quot;' + pkg + '&quot; pip package'"
                   >
                     <svg v-if="!installer.isPackageUninstalling(pkg)" class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -96,6 +105,7 @@ export default {
             newPackage,
             totalPackages,
             filteredPackages,
+            requiredPackages,
         }
     }
 }
