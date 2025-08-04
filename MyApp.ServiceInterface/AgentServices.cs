@@ -21,7 +21,7 @@ public class AgentServices(ILogger<AgentServices> log,
 {
     public AgentEventsManager AgentManager { get; } = agentManager;
     
-    public object Post(UpdateComfyAgent request)
+    public async Task<object> Post(UpdateComfyAgent request)
     {
         var userId = Request.AssertApiKeyUserId();
         var now = DateTime.UtcNow;
@@ -57,22 +57,45 @@ public class AgentServices(ILogger<AgentServices> log,
         }
 
         agent.SetLastUpdate();
-        agent.QueueCount = request.QueueCount;
         agent.RunningGenerationIds = request.RunningGenerationIds ?? [];
         agent.QueuedGenerationIds = request.QueuedGenerationIds ?? [];
         agent.QueuedIds = [..agent.QueuedGenerationIds, ..agent.RunningGenerationIds];
+        agent.Status = request.Status ?? request.Error?.Message ?? agent.Status;
+        agent.Error = request.Error;
+        agent.QueueCount = request.QueueCount;
         agent.Gpus = request.Gpus ?? agent.Gpus;
-        agent.RunningGenerationIds = request.RunningGenerationIds ?? [];
-        agent.QueuedGenerationIds = request.QueuedGenerationIds ?? [];
-            
-        db.UpdateOnly(() => new ComfyAgent
+        agent.Models = request.Models ?? agent.Models;
+        agent.LanguageModels = request.LanguageModels ?? agent.LanguageModels;
+        agent.InstalledPip = request.InstalledPip ?? agent.InstalledPip;
+        agent.InstalledNodes = request.InstalledNodes ?? agent.InstalledNodes;
+        agent.InstalledModels = request.InstalledModels ?? agent.InstalledModels;
+        agent.LastIp = Request!.UserHostAddress;
+
+        var objectInfoFile = base.Request!.Files.FirstOrDefault();
+        if (objectInfoFile != null)
         {
-            QueueCount = agent.QueueCount,
-            Gpus = agent.Gpus,
-            ModifiedDate = agent.ModifiedDate,
-            LastIp = Request!.UserHostAddress,
-        }, where: x => x.DeviceId == request.DeviceId);
-        
+            var objectInfoJson = await objectInfoFile.InputStream.ReadToEndAsync();
+            UpdateNodeDefs(agent, objectInfoJson);
+            Db.Save(agent);
+        }
+        else
+        {
+            db.UpdateOnly(() => new ComfyAgent
+            {
+                Status = agent.Status,
+                Error = agent.Error,
+                QueueCount = agent.QueueCount,
+                Gpus = agent.Gpus,
+                Models = agent.Models,
+                LanguageModels = agent.LanguageModels,
+                InstalledPip = agent.InstalledPip,
+                InstalledNodes = agent.InstalledNodes,
+                InstalledModels = agent.InstalledModels,
+                ModifiedDate = agent.ModifiedDate,
+                LastIp = agent.LastIp,
+            }, where: x => x.DeviceId == request.DeviceId);
+        }
+
         return new EmptyResponse();
     }
 
@@ -109,9 +132,6 @@ public class AgentServices(ILogger<AgentServices> log,
         }
 
         agent.Status = request.Status ?? agent.Status;
-        agent.Downloading = request.Downloading ?? agent.Downloading;
-        agent.Downloaded = request.Downloaded ?? agent.Downloaded;
-        agent.DownloadFailed = request.DownloadFailed ?? agent.DownloadFailed;
         agent.Logs = request.Logs ?? agent.Logs;
         agent.Error = request.Error ?? agent.Error;
         agent.SetLastUpdate(now);
@@ -122,9 +142,6 @@ public class AgentServices(ILogger<AgentServices> log,
             db.UpdateOnly(() => new ComfyAgent
             {
                 Status = agent.Status,
-                Downloading = agent.Downloading,
-                Downloaded = agent.Downloaded,
-                DownloadFailed = agent.DownloadFailed,
                 Logs = agent.Logs,
                 Error = agent.Error,
                 ModifiedDate = agent.ModifiedDate,
@@ -135,9 +152,6 @@ public class AgentServices(ILogger<AgentServices> log,
             db.UpdateOnly(() => new ComfyAgent
             {
                 Status = agent.Status,
-                Downloading = agent.Downloading,
-                Downloaded = agent.Downloaded,
-                DownloadFailed = agent.DownloadFailed,
                 Error = agent.Error,
                 ModifiedDate = now,
             }, where: x => x.DeviceId == request.DeviceId);
@@ -271,25 +285,23 @@ public class AgentServices(ILogger<AgentServices> log,
         return results;
     }
     
+    List<string> Sorted(IEnumerable<string>? items) => items?.OrderBy(x => x).ToList() ?? [];
+        
     public async Task<object> Any(RegisterComfyAgent request)
     {
         var objectInfoFile = base.Request!.Files.FirstOrDefault();
         if (objectInfoFile == null)
             throw new ArgumentException("No object_info file uploaded.");
 
-        var debugInfoJson = await objectInfoFile.InputStream.ReadToEndAsync();
+        var objectInfoJson = await objectInfoFile.InputStream.ReadToEndAsync();
         
-        var nodeDefs = ComfyMetadata.ParseNodeDefinitions(debugInfoJson);
-
         var apiKey = (ApiKeysFeature.ApiKey)Request.GetApiKey();
         var userId = apiKey.UserId
             ?? throw new Exception("API Key not assigned to a user");
 
         var workflowPath = request.DeviceId.GetObjectInfoPath();
-        await appData.WriteAppDataTextFileAsync(workflowPath, debugInfoJson);
+        await appData.WriteAppDataTextFileAsync(workflowPath, objectInfoJson);
 
-        List<string> sorted(IEnumerable<string>? items) => items?.OrderBy(x => x).ToList() ?? [];
-        
         using var db = Db;
         var agent = db.Single<ComfyAgent>(x => x.DeviceId == request.DeviceId);
         if (agent != null)
@@ -317,59 +329,26 @@ public class AgentServices(ILogger<AgentServices> log,
         }
         
         agent.SetLastUpdate();
+        agent.Status = $"Registered at {agent.LastUpdate:HH:mm:ss}";
         agent.Version = request.Version;
         agent.ComfyVersion = request.ComfyVersion;
         agent.Gpus = request.Gpus;
-        agent.NodeDefs = nodeDefs;
-        agent.Nodes = sorted(nodeDefs.Keys.Where(x => !appData.DefaultGatewayNodes.Contains(x)));
+        agent.Models = request.Models ?? [];
+        agent.LanguageModels = request.LanguageModels;
+        agent.InstalledPip = request.InstalledPip;
+        agent.InstalledNodes = request.InstalledNodes;
+        agent.InstalledModels = request.InstalledModels;
+        agent.Config = request.Config;
         agent.Workflows = request.Workflows ?? [];
         agent.UserName = apiKey.UserName;
         agent.ApiKey = apiKey.Key;
         agent.Enabled = true;
         agent.OfflineDate = null;
         agent.LastIp = Request.UserHostAddress;
-        agent.LanguageModels = request.LanguageModels;
-        agent.Downloading = null;
-        agent.Status = "Registered";
         agent.Logs = null;
         agent.Error = null;
 
-        if (!nodeDefs.TryGetValue("CheckpointLoader", out var checkpointLoader))
-            throw new Exception("CheckpointLoader node not found");
-        agent.Checkpoints = sorted(checkpointLoader.GetInput("ckpt_name")?.EnumValues);
-
-        if (nodeDefs.TryGetValue("UNETLoader", out var unetLoader))
-            agent.DiffusionModels = sorted(unetLoader.GetInput("unet_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("VAELoader", out var vaeLoader))
-            agent.Vae = sorted(vaeLoader.GetInput("vae_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("CLIPLoader", out var clipLoader))
-            agent.Clip = sorted(clipLoader.GetInput("clip_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("CLIPVisionLoader", out var clipVisionLoader))
-            agent.ClipVision = sorted(clipVisionLoader.GetInput("clip_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("LoraLoader", out var loraLoader))
-            agent.Loras = sorted(loraLoader.GetInput("lora_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("UpscaleModelLoader", out var upscaleLoader))
-            agent.UpscaleModels = sorted(upscaleLoader.GetInput("model_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("ControlNetLoader", out var controlNetLoader))
-            agent.Controlnet = sorted(controlNetLoader.GetInput("control_net_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("StyleModelLoader", out var styleLoader))
-            agent.StyleModels = sorted(styleLoader.GetInput("style_model_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("PhotoMakerLoader", out var photoMakerLoader))
-            agent.Photomaker = sorted(photoMakerLoader.GetInput("photomaker_model_name")?.EnumValues);
-        if (nodeDefs.TryGetValue("GLIGENLoader", out var gligenLoader))
-            agent.Gligen = sorted(gligenLoader.GetInput("gligen_name")?.EnumValues);
-        
-        //TODO Verify predicted locations
-        agent.Hypernetworks = sorted(nodeDefs.TryGetValue("HypernetworkLoader", out var hypernetworkLoader) 
-            ? hypernetworkLoader.GetInput("hypernetwork_name")?.EnumValues : null);
-        agent.Diffusers = sorted(nodeDefs.TryGetValue("DiffusersLoader", out var diffusersLoader) 
-            ? diffusersLoader.GetInput("model_path")?.EnumValues : null); // diffusers_name?
-        agent.Embeddings = sorted(nodeDefs.TryGetValue("TextualInversionLoader", out var textualInversionLoader) 
-            ? textualInversionLoader.GetInput("textual_inversion_name")?.EnumValues : null);
-        agent.Configs = sorted(nodeDefs.TryGetValue("ConfigLoader", out var configLoader) 
-            ? configLoader.GetInput("config_name")?.EnumValues : null);
-        agent.VaeApprox = sorted(nodeDefs.TryGetValue("VAEApproxLoader", out var vaeApproxLoader) 
-            ? vaeApproxLoader.GetInput("vae_approx_name")?.EnumValues : null);
+        UpdateNodeDefs(agent, objectInfoJson);
         
         db.Save(agent);
 
@@ -419,6 +398,20 @@ public class AgentServices(ILogger<AgentServices> log,
         };
         
         return ret;
+    }
+
+    public void UpdateNodeDefs(ComfyAgent agent, string objectInfoJson)
+    {
+        // Parse the JSON document directly
+        using var jsonDoc = ComfyMetadata.LoadJsonDocument(objectInfoJson);
+
+        var nodeDefs = ComfyMetadata.ParseNodeDefinitions(jsonDoc);
+        agent.NodeDefs = nodeDefs;
+        agent.Nodes = Sorted(nodeDefs.Keys.Where(x => !appData.DefaultGatewayNodes.Contains(x)));
+        if (!nodeDefs.TryGetValue("CheckpointLoader", out var checkpointLoader))
+            throw new Exception("CheckpointLoader node not found");
+
+        // agent.Models = ComfyMetadata.ParseModels(jsonDoc);
     }
 
     public object Post(UnRegisterComfyAgent request)

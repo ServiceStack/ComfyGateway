@@ -4,6 +4,7 @@ import { lastLeftPart, rightPart } from "@servicestack/client"
 import { WorkflowGroups, reactionCounts, pluralize } from "../lib/utils.mjs"
 import { UploadNewWorkflow, BaseModel, DevicePool, MyDevices } from "../../mjs/dtos.mjs"
 import FileUpload from "./FileUpload.mjs"
+import DeviceManagerDialog from "./DeviceManagerDialog.mjs"
 import DeviceDetailsDialog from "./DeviceDetailsDialog.mjs"
 import DeviceInstaller from "./DeviceInstaller.mjs"
 
@@ -386,6 +387,7 @@ export default {
         CompatibleDeviceLabel,
         DeviceInstaller,
         FullDeviceInfo,
+        DeviceManagerDialog,
         DeviceDetailsDialog,
     },
     template: `
@@ -563,7 +565,7 @@ export default {
             @close="showUploadForm = false"
             @uploaded="onWorkflowUploaded"
         />
-      
+
         <DeviceDetailsDialog v-if="deviceInfo" :device="deviceInfo" @done="deviceInfo = null" />
         <DeviceInstaller v-else-if="deviceInstaller" :device="runOnDevices[0]" :version="deviceInstaller.version" @done="deviceInstaller = null" />
     </div>

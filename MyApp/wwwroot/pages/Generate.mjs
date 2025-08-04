@@ -1,6 +1,6 @@
 import { ref, onMounted, watch, toRaw, inject } from "vue"
 import { useRouter, useRoute } from "vue-router"
-import { ApiResult, indexOfAny, JSV } from "@servicestack/client"
+import {ApiResult, indexOfAny, JSV, omit} from "@servicestack/client"
 import { useClient, useFormatters } from "@servicestack/vue"
 import {
     QueueWorkflow, WaitForMyWorkflowGenerations, MyWorkflowGenerations, RequeueGeneration
@@ -135,6 +135,7 @@ export default {
         const runError = ref(null)
         const showRecents = ref(true)
         const showQueuedPopup = ref(false)
+        const uploadNames = ['image','video','audio']
 
         function regenSeedsIfNeeded() {
             if ('seed' in workflowArgs.value && store.usedSeeds.includes(`${workflowArgs.value.seed}`)) {
@@ -198,6 +199,24 @@ export default {
                 //updateAdvancedArgs(args)
                 selectedWorkflowInfo.value = await store.getWorkflowInfo(workflow.pinVersionId)
                 updateAdvancedArgs(args)
+
+                uploadNames.forEach(inputName => {
+                    if (route.query[inputName]) {
+                        workflowArgs.value[inputName] = route.query[inputName]
+                    }
+                })
+
+                if (route.query.version) {
+                    router.replace({ query:omit(route.query, ['version']) })
+                }
+                
+                // Need to update route in timeout as 
+                // setTimeout(() => {
+                //     if (uploadNames.some(x => route.query[x]) || route.query.version) {
+                //         router.replace({ query:{} })
+                //     }
+                // }, 4)
+                
             } catch (e) {
                 console.error('Failed to select workflow', e)
             }
@@ -397,17 +416,6 @@ export default {
 
             console.log('startCheckingForUpdates.runWorkflow()')
             startCheckingForUpdates()
-
-            let argsRemoved = false
-            for (const inputName of ['image','video','audio']) {
-                if (route.query[inputName]) {
-                    delete workflowArgs.value[inputName]
-                    argsRemoved = true
-                }
-            }
-            if (argsRemoved) {
-                router.push({ path:'/generate/feed/' + threadId })
-            }
         }
 
         function startCheckingForUpdates(timeout=0) {

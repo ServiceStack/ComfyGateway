@@ -53,6 +53,16 @@ export function threadQuery(query) {
     return omit(query, ['new'])
 }
 
+export function humanifyNumber(n) {
+    if (n >= 1_000_000_000)
+        return (n / 1_000_000_000).toFixed(1) + "b";
+    if (n >= 1_000_000)
+        return (n / 1_000_000).toFixed(1) + "m";
+    if (n >= 1_000)
+        return (n / 1_000).toFixed(1) + "k";
+    return n.toLocaleString();
+}
+
 export function formatDuration(xsdDuration) {
     const seconds = fromXsdDuration(xsdDuration)
     const wholeSeconds = Math.floor(seconds);
@@ -149,6 +159,14 @@ export function toJsonObject(json) {
     } catch (e) {
         return null
     }
+}
+
+export function storageArray(key) {
+    return toJsonArray(localStorage.getItem(key)) ?? []
+}
+
+export function storageObject(key) {
+    return toJsonObject(localStorage.getItem(key)) ?? {}
 }
 
 export function sortByCreatedDesc(rows) {

@@ -1,8 +1,8 @@
-import {reactive, ref, toRaw} from "vue"
+import { reactive, ref, toRaw } from "vue"
 import { useAuth } from "@servicestack/vue"
-import { JsonServiceClient, ApiResult, combinePaths, rightPart } from "@servicestack/client"
+import { JsonServiceClient, ApiResult, combinePaths, rightPart, lastRightPart } from "@servicestack/client"
 import { openDB, deleteDB, wrap, unwrap } from '/lib/mjs/idb.mjs'
-import { toJsonObject, toJsonArray, sortByCreatedDesc, sortByModifiedDesc, getRatingDisplay, pluralize } from "./utils.mjs"
+import { toJsonObject, sortByCreatedDesc, getRatingDisplay, getHDClass, toJsonArray, storageArray } from "./utils.mjs"
 import {
     QueryWorkflows,
     GetWorkflowInfo,
@@ -34,11 +34,12 @@ import {
     FeatureArtifact,
     UnFeatureArtifact,
     RemoveDevice,
-    QueryArtifacts, 
-    DevicePool, 
+    QueryArtifacts,
+    DevicePool,
     MyDevices,
+    QueryAssets,
     Rating,
-    Table, 
+    Table, AgentCommand, InstallCustomNode,
 } from "../../mjs/dtos.mjs"
 
 export const AssetsBasePath = globalThis.AssetsBasePath = globalThis.Server?.app.baseUrl ?? location.origin
@@ -58,8 +59,9 @@ const AppTables = {
     WorkflowInfo: 'WorkflowInfo',
     WorkflowVersion: 'WorkflowVersion',
     Artifact: 'Artifact',
+    Asset: 'Asset',
     DeletedRow: 'DeletedRow',
-    CacheEntry: 'Cache',
+    Cache: 'Cache',
 }
 const UserTables = {
     WorkflowGeneration: 'WorkflowGeneration',
@@ -101,6 +103,7 @@ let o = {
     _dbApp: null,
     _dbUser: null,
     _client: new JsonServiceClient(),
+    events: null,
     prefs: null,
     workflowGenerationCount: 0,
     threadCount: 0,
@@ -130,11 +133,16 @@ let o = {
     myDevices: [],
     /** @type {AgentInfo[]} */
     allDevices: [],
+    customNodes: [],
+    customNodesMap: {},
+    deviceDownloads: {},
+    deviceUninstalls: {},
     
-    async init(client) {
+    async init(client, events) {
         console.log('store.init', this._init, useAuth().user?.value?.userName)
         if (this._init) return
         this._client = client
+        this.events = events
 
         this.user = useAuth().user?.value
         const prevUser = toJsonObject(localStorage.getItem('gateway:user'))
@@ -198,8 +206,11 @@ let o = {
                 createStore(db, Tables.Artifact, { keyPath: 'id' }, {
                     indexes: ['type', 'generationId', 'createdBy', 'createdDate']
                 })
+                createStore(db, Tables.Asset, { keyPath: 'id' }, {
+                    indexes: ['name', 'type', 'base', 'modifiedBy', 'modifiedDate']
+                })
                 createStore(db, Tables.DeletedRow, { keyPath: 'id' })
-                createStore(db, Tables.CacheEntry, { keyPath: 'id' })
+                createStore(db, Tables.Cache, { keyPath: 'id' })
             },
             blocked(currentVersion, blockedVersion, event) {
                 console.log('Database blocked - close all connections first', event);
@@ -352,6 +363,8 @@ let o = {
             this.processDeletedRows(),
             this.loadPoolDevices(),
             this.loadMyDevices(),
+            this.loadAssets(),
+            this.loadCustomNodes(),
         ]
         if (this.user) {
             tasks.push(
@@ -420,6 +433,22 @@ let o = {
         })
         this.workflows = workflows.filter(x => x.version)
         this.workflows.sort((a, b) => b.version.reactionsCount - a.version.reactionsCount)
+    },
+    
+    async loadAssets() {
+        let afterModifiedDate = await this.getLastModified(Tables.Asset)
+        const orderBy = 'modifiedDate' 
+        const request = afterModifiedDate
+            ? new QueryAssets({ afterModifiedDate, orderBy })
+            : new QueryAssets({ orderBy })
+
+        const api = await this._client.api(request)
+        if (api.response?.results) {
+            // save to IndexedDB
+            const tx = this.transaction(Tables.Asset, 'readwrite')
+            await Promise.all(api.response.results.map(x => tx.store.put(x)))
+            await tx.done
+        }
     },
 
     async processDeletedRows() {
@@ -819,6 +848,9 @@ let o = {
     },
     async getWorkflowGenerations() {
         return await this.getAll(Tables.WorkflowGeneration)
+    },
+    async getAssets() {
+        return await this.getAll(Tables.Asset)
     },
     async findWorkflowGeneration(generationId) {
         const gen = await this.get(Tables.WorkflowGeneration, generationId)
@@ -1233,10 +1265,34 @@ let o = {
         }
         return Array.from(assets).sort()
     },
-    
+
+    urlToName(url) {
+        name = lastRightPart(url, '/')
+        if (name.endsWith('.git')) {
+            name = name.slice(0, -4)
+        }
+        name = name.replace(/[-_]/g, ' ').replace(/comfyui/gi, 'ComfyUI')
+        return name.split(' ').filter(x => x).map(x => x[0].toUpperCase() + x.slice(1)).join(' ')
+    },
+
     populateAllDevices() {
-        this.allDevices = [...this.myDevices]
-        this.allDevices.push(...this.poolDevices.filter(x => !this.myDevices.find(y => y.id === x.id)))
+        const allDevices = [...this.myDevices]
+        allDevices.push(...this.poolDevices.filter(x => !this.myDevices.find(y => y.id === x.id)))
+        allDevices.forEach(device => this.populateDevice(device))
+        this.allDevices = allDevices.map(device => reactive(device))
+    },
+    
+    populateDevice(device) {
+        if (!device) alert(device)
+        device.updated = (device.updated ?? 0) + 1
+        device.modelsSet = this.getDeviceModelsSet(device)
+        device.installedCustomNodes = (device.installedNodes ?? [])
+            .filter(url => url !== 'https://github.com/ServiceStack/comfy-agent')
+            .map(url => Object.assign({
+                url,
+                name: this.urlToName(url),
+                nodes: [],
+            }, this.customNodesMap[url]))
     },
     
     // Devices
@@ -1293,6 +1349,83 @@ let o = {
         return device.shortId + ' - ' + (device.gpus?.[0]?.name || '') + (device.lastIp ? (' @ ' + device.lastIp) : '')
     },
     
+    variantWorkflowsForArtifact(artifact) {
+        return artifact && !getHDClass(artifact.width, artifact.height) 
+            ? this.workflowVersions.filter(x => x.info?.type === 'ImageToImage')
+            : []
+    },
+    
+    canManageDevice(device) {
+        return store.isAdmin || device.userId === store.userId
+    },
+
+    getDeviceModelsSet(device) {
+        const models = device.models || {}
+        const modelSet = new Set()
+        // combine model key with model files
+        Object.keys(models).forEach(key => {
+            models[key].forEach(model => {
+                modelSet.add(`${key}/${model}`)
+            })
+        })
+        return modelSet
+    },
+
+    async agentCommand(deviceId, command, args) {
+        console.log('store.agentCommand', deviceId, command, args)
+        this.events.publish('status', `${command}ing...`)
+        const api = await this._client.api(new AgentCommand({
+            deviceId,
+            command,
+        }))
+        if (api.response) {
+            this.events.publish('status', api.response?.result || `${command} queued...`)
+        } else {
+            this.events.publish('status', `Failed to ${command}: ${api.error?.message || 'Unknown error'}`)
+        }
+    },
+
+    async loadCachedJsonUrl(url, opt=null) {
+        console.log('loadCachedJsonUrl', url)
+        const r = await fetch(url, { 
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache' 
+            } 
+        })
+        opt = opt || {}
+        const value = await r.json()
+        this.put(Tables.Cache, {
+            id: url,
+            type: opt.type || lastRightPart(url, '/'),
+            value,
+            expires: opt.expires ?? Date.now() + 1000 * 60 * 60 * 24, // 1 day
+        })
+        return value
+    },
+    
+    async getCachedJsonUrl(url, opt) {
+        const entry = await this.get(Tables.Cache, url)
+        if (entry?.value) {
+            if (!entry.expires || entry.expires < Date.now() || location.origin === 'https://localhost:5001') {
+                this.loadCachedJsonUrl(url, opt)
+            }
+            return entry.value
+        }
+        return await this.loadCachedJsonUrl(url, opt)
+    },
+
+    async loadCustomNodes() {
+        this.customNodes = await this.getCustomNodes()
+        this.customNodesMap = this.customNodes.reduce((acc, node) => {
+            acc[node.url] = node
+            return acc
+        }, {})
+    },
+    
+    async getCustomNodes() {
+        return await this.getCachedJsonUrl(`/data/custom-nodes.json`)
+    },
 }
 
 let store = reactive(o)

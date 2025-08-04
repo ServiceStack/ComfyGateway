@@ -104,7 +104,7 @@ export default {
                             <option value="-modifiedDate">Recently Modified</option>
                             <option value="-width">Landscape First</option>
                             <option value="-height">Portrait First</option>
-                            <option value="-resolution">Resolution</option>
+                            <option value="-resolution">High Resolution</option>
                         </select>
                     </div>
                 </div>

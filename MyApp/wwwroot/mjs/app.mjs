@@ -1,8 +1,9 @@
 import { createApp, reactive, ref, computed, nextTick, defineAsyncComponent } from "vue"
-import { JsonServiceClient, EventBus, $1, $$ } from "@servicestack/client"
+import { JsonServiceClient, EventBus, $1, $$, lastLeftPart } from "@servicestack/client"
 import ServiceStackVue, { useAuth } from "@servicestack/vue"
 import Header from "../pages/components/Header.mjs"
 import store from "../pages/lib/store.mjs"
+import { humanifyNumber, pluralize } from "../pages/lib/utils.mjs"
 import { createWebHistory, createRouter } from "vue-router"
 
 const routes = [
@@ -17,6 +18,12 @@ const router = createRouter({
     history: createWebHistory(),
     routes,
 })
+
+const globalFunctions = {
+    lastLeftPart,
+    pluralize,
+    humanifyNumber,
+}
 
 let client = null, Apps = [], events = new EventBus()
 let AppData = {
@@ -55,7 +62,7 @@ const Components = {
     App,
 }
 const CustomElements = [
-    'lite-youtube'
+    'lite-youtube',
 ]
 
 const alreadyMounted = el => el.__vue_app__ 
@@ -115,7 +122,13 @@ export function mount(sel, component, props) {
     app.config.errorHandler = error => { 
         console.log(error) 
     }
-    app.config.compilerOptions.isCustomElement = tag => CustomElements.includes(tag)
+    app.config.compilerOptions.isCustomElement = 
+        tag => CustomElements.includes(tag) || tag.startsWith('el-')
+    
+    Object.keys(globalFunctions).forEach(name => {
+        app.config.globalProperties[name] = globalFunctions[name]
+    })
+    
     app.mount(el)
     Apps.push(app)
     return app
@@ -134,7 +147,7 @@ async function mountApp(el, props) {
 
 export async function configure() {
     client ??= new JsonServiceClient()
-    await store.init(client)
+    await store.init(client, events)
     return { 
         client,
         store,

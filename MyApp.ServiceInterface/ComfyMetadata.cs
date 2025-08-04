@@ -38,6 +38,25 @@ public class ComfyMetadata
     public Dictionary<string, NodeInfo> DefaultNodeDefinitions =>
         NodeDefinitions.GetValueOrDefault(DefaultUrl) ?? throw new ArgumentNullException(nameof(NodeDefinitions));
 
+    public static JsonDocument LoadJsonDocument(string objectInfoJson)
+    {
+        JsonDocument? jsonDoc = null;
+        try
+        {
+            jsonDoc = JsonDocument.Parse(objectInfoJson, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
+            return jsonDoc;
+        }
+        catch
+        {
+            jsonDoc?.Dispose();
+            throw;
+        }
+    }
+
     /// <summary>
     /// Loads and parses the object_info.json file.
     /// </summary>
@@ -45,12 +64,53 @@ public class ComfyMetadata
     public static Dictionary<string, NodeInfo> ParseNodeDefinitions(string objectInfoJson)
     {
         // Parse the JSON document directly
-        using var jsonDoc = JsonDocument.Parse(objectInfoJson, new JsonDocumentOptions
-        {
-            AllowTrailingCommas = true,
-            CommentHandling = JsonCommentHandling.Skip
-        });
+        using var jsonDoc = LoadJsonDocument(objectInfoJson);
+        return ParseNodeDefinitions(jsonDoc);
+    }
 
+    public static Dictionary<string, List<string>> ParseModels(string objectInfoJson)
+    {
+        // Parse the JSON document directly
+        using var jsonDoc = LoadJsonDocument(objectInfoJson);
+        return ParseModels(jsonDoc);
+    }
+
+    public static Dictionary<string, List<string>> ParseModels(JsonDocument jsonDoc)
+    {
+        var ret = new Dictionary<string, List<string>>();
+        foreach (var nodeProp in jsonDoc.RootElement.EnumerateObject())
+        {
+            var nodeName = nodeProp.Name;
+            if (nodeName != "RequiresAsset") 
+                continue;
+
+            if (nodeProp.Value.TryGetProperty("input", out var inputProp))
+            {
+                if (inputProp.TryGetProperty("hidden", out var hiddenProp))
+                {
+                    foreach (var hiddenInput in hiddenProp.EnumerateObject())
+                    {
+                        if (hiddenInput.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            var firstElement = hiddenInput.Value[0];
+                            if (firstElement.ValueKind == JsonValueKind.Array)
+                            {
+                                ret[hiddenInput.Name] = firstElement.EnumerateArray().Select(e => $"{e.AsObject()}").ToList();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return ret;
+    }
+
+    /// <summary>
+    /// Loads and parses the object_info.json file.
+    /// </summary>
+    /// <param name="jsonDoc">The JSON document of object_info.json</param>
+    public static Dictionary<string, NodeInfo> ParseNodeDefinitions(JsonDocument jsonDoc)
+    {
         // Create a dictionary to hold the node info
         var objectInfo = new Dictionary<string, NodeInfo>();
 

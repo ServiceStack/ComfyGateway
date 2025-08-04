@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted, inject } from "vue"
+import {ref, computed, onMounted, onUnmounted, inject, watch} from "vue"
 import { useRoute } from "vue-router"
 import {PrimaryButton, SelectInput, useClient, useFormatters, useUtils} from "@servicestack/vue"
 import { $1, leftPart, lastRightPart } from "@servicestack/client"
@@ -349,7 +349,7 @@ export default {
                 </div>
 
                 <!-- Generation Parameters -->
-                <div v-if="generation.args" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                <div v-if="filteredArgs.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Generation Parameters</h3>
                     <div class="space-y-3">
                         <div v-for="(value, field) in filteredArgs" :key="field"
@@ -367,14 +367,14 @@ export default {
                 </div>
 
                 <!-- Variant Gallery -->
-                <div v-if="store.workflowVersions.filter(x => x.info?.type === 'ImageToImage').length || variants.length" 
+                <div v-if="store.variantWorkflowsForArtifact(selectedArtifact).length || variants.length" 
                     class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Variants</h3>
                     
                     <div v-if="variants.length" class="grid grid-cols-2 gap-4">
-                      <a v-for="artifact in variants" :key="artifact.id"
+                      <RouterLink v-for="artifact in variants" :key="artifact.id"
                            class="bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-blue-500 relative"
-                           :href="'/generations/' + artifact.generationId">
+                           :to="{ path:'/generations/' + artifact.generationId }">
                         <div v-if="getHDClass(artifact.width, artifact.height)" class="absolute top-1 left-1 flex items-center inline-flex rounded-sm bg-gray-200/50 dark:bg-gray-700/50 px-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-700/10">
                           {{getHDClass(artifact.width, artifact.height)}}
                         </div>
@@ -392,12 +392,12 @@ export default {
                           <span class="text-xs text-gray-400">Restricted Content</span>
                         </div>
                         <span v-if="artifact.variantName" class="px-1 text-xs text-center truncate" :title="artifact.variantName">{{artifact.variantName}}</span>
-                      </a>
+                      </RouterLink>
                     </div>
                     
-                    <div class="mt-4 flex items-end gap-x-2">
+                    <div v-if="store.variantWorkflowsForArtifact(selectedArtifact).length" class="mt-4 flex items-end gap-x-2">
                       <SelectInput id="newVariant" v-model="newVariant" 
-                                   :entries="store.workflowVersions.filter(x => x.info?.type === 'ImageToImage').map(x => ({ key: x.id, value: x.name }))" />
+                                   :entries="store.variantWorkflowsForArtifact(selectedArtifact).map(x => ({ key: x.id, value: x.name }))" />
                       <div>
                         <RouterLink :to="!newVariant ? '' : { path:'/generate/feed', query: { 'new':'', version:newVariant, image:lastRightPart(selectedArtifact.url,'/') } }"
                                     class="inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-lg transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
@@ -531,12 +531,11 @@ export default {
             variants.value = api.response?.results ?? []
         }
 
-        onMounted(async () => {
+        async function onRouteChange() {
             await Promise.all([
                 loadGeneration(),
                 loadVariants(),
             ])
-            document.addEventListener("keydown", handleKeydown)
 
             // Set the selected URL, preferring posterImage, then first artifact URL
             if (generation.value?.posterImage) {
@@ -567,6 +566,13 @@ export default {
                     loadComments(),
                 ])
             }
+        }
+
+        watch(() => route.path, onRouteChange)
+
+        onMounted(async () => {
+            document.addEventListener("keydown", handleKeydown)
+            await onRouteChange()
         })
 
         onUnmounted(() => {

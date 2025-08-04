@@ -53,7 +53,7 @@ public class ConfigureDbMigrations : IHostingStartup
             AppTasks.Register("migrate.rerun", args => migrator.Rerun(args[0]));
             AppTasks.Register("adhoc", args => {
                 var Db = migrator.DbFactory.OpenDbConnection();
-                var log = NullLogger.Instance;
+                // var log = NullLogger.Instance;
                 Db.DropAndCreateTable<DeletedRow>();
                 Db.DropAndCreateTable<ComfyAgent>();
             });

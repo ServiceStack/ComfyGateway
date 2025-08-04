@@ -2,9 +2,11 @@ import { ref, computed } from "vue"
 import { formatName } from "./WorkflowsViewer.mjs"
 import { WorkflowGroups, toJsonObject, toJsonArray, acceptedImages, acceptedVideos, acceptedAudios } from "../lib/utils.mjs"
 import FileUpload from "./FileUpload.mjs"
+import {CloseButton} from "@servicestack/vue";
 
 export default {
     components: {
+        CloseButton,
         FileUpload,
     },
     template:`
@@ -144,13 +146,14 @@ export default {
                     </div>
                 </div>
                 <div v-if="hasInput('image')">
-                    <div v-if="workflowArgs.image" 
+                    <div v-if="workflowArgs.image || $route.query.image" 
                          class="flex justify-center border-gray-300 dark:border-gray-600 border-dashed relative flex flex-col items-center justify-center w-full h-64 border-2 rounded-lg bg-gray-50 dark:bg-gray-700">
-                      <img :src="'/artifacts/' + workflowArgs.image" alt=""
-                           class="size-48 aspect-square object-cover rounded-full">
-                      <input type="hidden" :value="workflowArgs.image">
+                      <CloseButton @click="$router.push({ query: {} }); delete workflowArgs.image" />
+                      <img :src="'/artifacts/' + (workflowArgs.image || $route.query.image)" alt=""
+                           class="size-48 aspect-square object-cover rounded-lg">
+                      <input type="hidden" :value="workflowArgs.image || $route.query.image">
                     </div>
-                    <FileUpload v-else ref="refImage" id="image" v-model="workflowArgs.image" required
+                    <FileUpload v-else ref="refImage" id="image" required
                         accept=".webp,.jpg,.jpeg,.png,.gif" :acceptLabel="acceptedImages" @change="renderKey++">
                         <template #title>
                             <span class="font-semibold text-green-600">Click to upload</span> or drag and drop

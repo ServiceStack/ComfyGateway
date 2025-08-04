@@ -11,9 +11,7 @@ public class Asset
     public string Name { get; set; }
     public string? Type { get; set; }
     public string? Base { get; set; }
-    [DataMember(Name = "save_path")]
     public string SavePath { get; set; }
-    [DataMember(Name = "filename")]
     public string FileName { get; set; }
     public string? Description { get; set; }
     public string? Reference { get; set; }
@@ -24,8 +22,23 @@ public class Asset
     public string? Hash { get; set; }  // SHA256
     public DateTime? LastChecked { get; set; }
     public DateTime? ModifiedDate { get; set; }
+    public string? ModifiedBy { get; set; }
 }
 
+public class Document
+{
+    [AutoIncrement] 
+    public int Id { get; set; }
+    public string Type { get; set; }
+    [PgSqlJsonB] 
+    public string Content { get; set; }
+    [PgSqlJsonB] 
+    public Dictionary<string,object?>? Args { get; set; }
+    public long? RefId { get; set; }
+    public string RefIdStr { get; set; }
+    public string CreatedBy { get; set; }
+    public DateTime CreatedDate { get; set; }
+}
 
 [ValidateApiKey]
 [Tag(Tags.Agent)]
@@ -52,7 +65,14 @@ public class UpdateComfyAgent : IPost, IReturn<EmptyResponse>
     [ValidateNotEmpty, ValidateExactLength(32)]
     public string DeviceId { get; set; }
     public int QueueCount { get; set; }
+    public string? Status { get; set; }
+    public ResponseStatus? Error { get; set; }
     public List<GpuInfo>? Gpus { get; set; }
+    public Dictionary<string, List<string>>? Models { get; set; }
+    public List<string>? LanguageModels { get; set; }
+    public List<string>? InstalledPip { get; set; }
+    public List<string>? InstalledNodes { get; set; }
+    public List<string>? InstalledModels { get; set; }
     public List<string>? RunningGenerationIds { get; set; }
     public List<string>? QueuedGenerationIds { get; set; }
 }
@@ -63,9 +83,6 @@ public class UpdateComfyAgentStatus : IPost, IReturn<EmptyResponse>
 {
     [ValidateNotEmpty, ValidateExactLength(32)]
     public string DeviceId { get; set; }
-    public string? Downloading { get; set; }
-    public string? Downloaded { get; set; }
-    public string? DownloadFailed { get; set; }
     public string? Status { get; set; }
     public string? Logs { get; set; }
     public ResponseStatus? Error { get; set; }
@@ -82,7 +99,12 @@ public class RegisterComfyAgent : IPost, IReturn<RegisterComfyAgentResponse>
     public List<string> Workflows { get; set; }
     public int QueueCount { get; set; }
     public List<GpuInfo>? Gpus { get; set; }
+    public Dictionary<string, List<string>>? Models { get; set; }
     public List<string>? LanguageModels { get; set; }
+    public List<string>? InstalledPip { get; set; }
+    public List<string>? InstalledNodes { get; set; }
+    public List<string>? InstalledModels { get; set; }
+    public ComfyAgentConfig Config { get; set; }
 }
 
 public class RegisterComfyAgentResponse

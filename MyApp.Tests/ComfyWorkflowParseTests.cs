@@ -15,14 +15,16 @@ public class ComfyWorkflowParseTests
     private string ApiKey = Environment.GetEnvironmentVariable("AI_SERVER_API_KEY");
     private Dictionary<string, NodeInfo> NodeDefs;
     string ObjectInfoPath = Path.Combine(AppContext.BaseDirectory, "../../../files/object_info.json");
+    private string ObjectInfoJson;
 
     public ComfyWorkflowParseTests()
     {
         var services = new ServiceCollection();
         services.AddHttpClient(nameof(ComfyGateway));
         serviceProvider = services.BuildServiceProvider();
-        
-        NodeDefs = ComfyMetadata.Instance.LoadObjectInfo(File.ReadAllText(ObjectInfoPath), ComfyEndpoint);
+
+        ObjectInfoJson = File.ReadAllText(ObjectInfoPath);
+        NodeDefs = ComfyMetadata.Instance.LoadObjectInfo(ObjectInfoJson, ComfyEndpoint);
     }
 
     ComfyGateway CreateGateway() => new(NullLogger<ComfyGateway>.Instance, serviceProvider.GetRequiredService<IHttpClientFactory>(), ComfyMetadata.Instance);
@@ -64,6 +66,13 @@ public class ComfyWorkflowParseTests
         var comfy = CreateGateway();
         var ret = await comfy.GetWorkflowJsonAsync(ComfyEndpoint, ApiKey, "basic.json");
         Assert.That(ret.Length, Is.GreaterThan(1000));
+    }
+
+    [Test]
+    public void Can_ParseModels()
+    {
+        var models = ComfyMetadata.ParseModels(ObjectInfoJson);
+        models.PrintDump();
     }
 
     [Test]
