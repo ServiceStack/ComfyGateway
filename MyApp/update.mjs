@@ -40,8 +40,32 @@ const modelListJson = fs.readFileSync('./wwwroot/data/model-list.json', 'utf8')
 const modelList = JSON.parse(modelListJson)
 const models = modelList.models
 const uniqueModels = []
+let unknownPaths = {}
 
 // Check and report duplicate URLs:
+
+const supportedPaths = [
+    'checkpoints',
+    'clip',
+    'clip_vision',
+    'configs',
+    'controlnet',
+    'diffusers',
+    'diffusion_models',
+    'embeddings',
+    'gligen',
+    'hypernetworks',
+    'loras',
+    'photomaker',
+    'style_models',
+    'text_encoders',
+    'unet',
+    'upscale_models',
+    'vae',
+    'vae_approx',
+    'ultralytics',
+    'sams',
+]
 
 const urls = new Set()
 const duplicates = new Set()
@@ -50,12 +74,44 @@ models.forEach(model => {
         duplicates.add(model.url)
     } else {
         urls.add(model.url)
-        uniqueModels.push(model)
+        if (model.save_path === 'default') {
+            model.save_path = model.type.toLowerCase()
+        }
+        if (model.save_path === 'upscale' || model.base === 'upscale') {
+            model.save_path = 'upscale_models'
+        }
+        if (model.save_path === 'diffusion_model') {
+            model.save_path = 'diffusion_models'
+        }
+        if (model.type === 'VAE') {
+            model.type = 'vae'
+        }
+        
+        if (true || supportedPaths.some(x => model.save_path.startsWith(x))) {
+            const asset = Object.assign({}, 
+                model, { 
+                save_path: undefined,
+                savePath: model.save_path,    
+            })
+            uniqueModels.push(asset)
+        } else {
+            unknownPaths[model.save_path] ??= 0
+            unknownPaths[model.save_path]++
+        }
     }
 })
 if (duplicates.size > 0) {
     console.log('Duplicate URLs found:')
     console.log(Array.from(duplicates))
+}
+
+if (Object.keys(unknownPaths).length > 0) {
+    console.log('Unknown save_paths found:')
+    // order by value desc
+    unknownPaths = Object.fromEntries(
+        Object.entries(unknownPaths).sort((a, b) => b[1] - a[1])
+    )
+    console.log(JSON.stringify(unknownPaths, null, 2))
 }
 
 const json = JSON.stringify(uniqueModels, null, 2)

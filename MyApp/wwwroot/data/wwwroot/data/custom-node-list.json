@@ -7939,16 +7939,6 @@
             "description": "A ComfyUI wrapper implementation of ThinkSound - an advanced AI model for generating high-quality audio from text descriptions and video content using Chain-of-Thought (CoT) reasoning."
         },
         {
-            "author": "ShmuelRonen",
-            "title": "multi-lora-stack",
-            "reference": "https://github.com/ShmuelRonen/multi-lora-stack",
-            "files": [
-                "https://github.com/ShmuelRonen/multi-lora-stack"
-            ],
-            "install_type": "git-clone",
-            "description": "A complete replacement for rgthree's Power Lora Loader with zero dependencies and two specialized versions to fit any workflow."
-        },
-        {
             "author": "redhottensors",
             "title": "ComfyUI-Prediction",
             "id": "prediction",
@@ -8725,7 +8715,7 @@
             ],
             "install_type": "git-clone",
             "description": "A comprehensive ComfyUI theme plugin with stunning cyberpunk aesthetics and powerful customization features"
-        },
+        },        
         {
             "author": "11dogzi",
             "title": "ComfUI-EGAdapterMadAssistant",
@@ -8736,16 +8726,6 @@
             ],
             "install_type": "git-clone",
             "description": "This is a hierarchical auxiliary project of the IPAdapter project, which uses a slider to quickly control the hierarchical weights and add fully random and semi random modes"
-        },
-        {
-            "author": "11dogzi",
-            "title": "HYPIR ComfyUI Plugin",
-            "reference": "https://github.com/11dogzi/Comfyui-HYPIR",
-            "files": [
-                "https://github.com/11dogzi/Comfyui-HYPIR"
-            ],
-            "install_type": "git-clone",
-            "description": "This is a ComfyUI plugin for [a/HYPIR (Harnessing Diffusion-Yielded Score Priors for Image Restoration)](https://github.com/XPixelGroup/HYPIR), a state-of-the-art image restoration model based on Stable Diffusion 2.1."
         },
         {
             "author": "BXYMartin",
@@ -14293,17 +14273,6 @@
             ],
             "install_type": "git-clone",
             "description": "Nodes to use Florence2 VLM for image tagging and captioning"
-        },
-        {
-            "author": "MiaoshouAI",
-            "title": "ComfyUI Video Segmentation Node",
-            "id": "miaoshouai-tagger",
-            "reference": "https://github.com/miaoshouai/ComfyUI-Video-Segmentation",
-            "files": [
-                "https://github.com/miaoshouai/ComfyUI-Video-Segmentation"
-            ],
-            "install_type": "git-clone",
-            "description": "A ComfyUI custom node for automatic video scene segmentation using TransNetV2."
         },
         {
             "author": "Patricio Gonzalez Vivo",
@@ -20074,16 +20043,6 @@
             ],
             "install_type": "git-clone",
             "description": "NODES: StarNode Startsettings for Flux and SD, Smplers for Flux and SD, Detail Deamon, Wildcards and more Helper Nodes"
-        },
-        {
-            "author": "Starnodes2024",
-            "title": "ComfyUI_StarBetaNodes",
-            "reference": "https://github.com/Starnodes2024/ComfyUI_StarBetaNodes",
-            "files": [
-                "https://github.com/Starnodes2024/ComfyUI_StarBetaNodes"
-            ],
-            "install_type": "git-clone",
-            "description": "Welcome to Star Beta Nodes - a collection of experimental custom nodes for ComfyUI designed for beta testing and feedback. These nodes provide enhanced functionality for image processing, video handling, and workflow automation."
         },
         {
             "author": "motivated3",
@@ -29774,16 +29733,6 @@
             "description": "A ComfyUI custom node package for batch image processing with filename preservation."
         },
         {
-            "author": "cedarconnor",
-            "title": "HunyuanWorld",
-            "reference": "https://github.com/cedarconnor/HunyuanWorld",
-            "files": [
-                "https://github.com/cedarconnor/HunyuanWorld"
-            ],
-            "install_type": "git-clone",
-            "description": "Transform text and images into immersive 360° 3D worlds using Tencent's HunyuanWorld-1.0 in ComfyUI with native FLUX architecture integration."
-        },
-        {
             "author": "vaishnav-vn",
             "title": "va1",
             "name": "Pad Image by Aspect",
@@ -30150,77 +30099,6 @@
             ],
             "install_type": "git-clone",
             "description": "A simple but powerful custom node for ComfyUI that patches LoRA models by adding dummy adaLN_modulation_1 weights. This solves compatibility errors when using LoRAs with newer model architectures that expect these keys to be present in the final_layer."
-        },
-        {
-            "author": "Simlym",
-            "title": "ComfyUI Prompt Helper",
-            "id": "prompt-helper",
-            "reference": "https://github.com/Simlym/comfyui-prompt-helper",
-            "files": [
-                "https://github.com/Simlym/comfyui-prompt-helper"
-            ],
-            "install_type": "git-clone",
-            "description": "A simple and intuitive prompt management tool for ComfyUI."
-        },
-        {
-            "author": "woct0rdho",
-            "title": "ComfyUI-RadialAttn",
-            "reference": "https://github.com/woct0rdho/ComfyUI-RadialAttn",
-            "files": [
-                "https://github.com/woct0rdho/ComfyUI-RadialAttn"
-            ],
-            "install_type": "git-clone",
-            "description": "RadialAttention in ComfyUI native workflow"
-        },
-        {
-            "author": "jiafuzeng",
-            "title": "LatentSync",
-            "reference": "https://github.com/jiafuzeng/comfyui-LatentSync",
-            "files": [
-                "https://github.com/jiafuzeng/comfyui-LatentSync"
-            ],
-            "install_type": "git-clone",
-            "description": "We present LatentSync, an end-to-end lip-sync method based on audio-conditioned latent diffusion models without any intermediate motion representation, diverging from previous diffusion-based lip-sync methods based on pixel-space diffusion or two-stage generation. Our framework can leverage the powerful capabilities of Stable Diffusion to directly model complex audio-visual correlations."
-        },
-        {
-            "author": "What-a-stupid-username",
-            "title": "comfyui_InversedSampler",
-            "reference": "https://github.com/What-a-stupid-username/comfyui-InversedSampler",
-            "files": [
-                "https://github.com/What-a-stupid-username/comfyui-InversedSampler"
-            ],
-            "install_type": "git-clone",
-            "description": "A inversed euler sampler to revert image to noisy latent. Can be used to improve content consistency when perform I2I."
-        },
-        {
-            "author": "rubenvillarreal",
-            "title": "ComfyUI_PoseAlign",
-            "reference": "https://github.com/rubenvillarreal/ComfyUI_PoseAlign",
-            "files": [
-                "https://github.com/rubenvillarreal/ComfyUI_PoseAlign"
-            ],
-            "install_type": "git-clone",
-            "description": "A custom node for ComfyUI that provides pose alignment functionality."
-        },
-        {
-            "author": "charlyad142",
-            "title": "ComfyUI Charly FitToAspectNode",
-            "reference": "https://github.com/charlyad142/ComfyUI_Charly_FitToAspectNode",
-            "files": [
-                "https://github.com/charlyad142/ComfyUI_Charly_FitToAspectNode"
-            ],
-            "install_type": "git-clone",
-            "description": "Un nodo personalizado para ComfyUI que ajusta imágenes a diferentes relaciones de aspecto manteniendo las proporciones originales."
-        },
-        {
-            "author": "Rizzlord",
-            "title": "ComfyUI-RizzNodes",
-            "reference": "https://github.com/Rizzlord/ComfyUI-RizzNodes",
-            "files": [
-                "https://github.com/Rizzlord/ComfyUI-RizzNodes"
-            ],
-            "install_type": "git-clone",
-            "description": "RizzNodes for ComfyUI Welcome to RizzNodes, a collection of custom nodes for ComfyUI designed to streamline various workflows, from loading images and models in batches to dynamic prompt generation and memory management."
         },
 
 
