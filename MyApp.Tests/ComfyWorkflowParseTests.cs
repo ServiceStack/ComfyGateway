@@ -162,6 +162,18 @@ public class ComfyWorkflowParseTests
     }
 
     [Test]
+    public void Can_parse_AceStep_audio_Workflow()
+    {
+        var workflowPath = "./workflows/text-to-audio/Ace-Step.v1.json";
+        var workflowJson = File.ReadAllText(workflowPath);
+        var workflow = ComfyWorkflowParser.Parse(workflowJson.ParseAsObjectDictionary(), workflowPath.LastRightPart('/'), NodeDefs) ?? throw new Exception($"Could not parse {workflowPath}");
+        var inputNames = workflow.Inputs.Map(x => x.Name);
+        workflow.PrintDump();
+        Assert.That(workflow.Type, Is.EqualTo(ComfyWorkflowType.TextToAudio));
+        // Assert.That(inputNames,Is.EquivalentTo("positivePrompt,negativePrompt,seconds,batch_size,seed,steps,cfg,sampler_name,scheduler,denoise".Split(',')));
+    }
+
+    [Test]
     public void Can_parse_florence2_Workflow()
     {
         var workflowPath = "./workflows/image-to-text/florence2.json";

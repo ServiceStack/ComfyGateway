@@ -31,5 +31,7 @@ public class ApplicationUser : IdentityUser
     public string? GoogleProfilePageUrl { get; set; }
     public string? MicrosoftUserId { get; set; }
     public string? Ratings { get; set; } // store as delimited string for EF
+    // public int TotalCredits { get; set; }
+    // public int MonthlyCredits { get; set; }
 }
 

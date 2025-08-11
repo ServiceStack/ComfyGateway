@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { delay, storageArray } from "./utils.mjs"
-import { lastRightPart, leftPart, rightPart } from "@servicestack/client"
+import { combinePaths, lastRightPart, leftPart, rightPart } from "@servicestack/client"
 import {
     AgentCommand,
     DeleteModel,
@@ -23,7 +23,9 @@ const Status = {
     Failed: 'failed',
 }
 
-export function useDeviceInstaller(store, client, device) {
+let lastClose = Date.now()
+
+export function useDeviceInstaller(store, client, device, route) {
     const deviceId = device.deviceId
     const downloadKey = `downloads:${deviceId}`
     const uninstallKey = `uninstalls:${deviceId}`
@@ -36,6 +38,25 @@ export function useDeviceInstaller(store, client, device) {
     const refError = ref()
     const refMonitor = ref(false)
     const refRunning = ref(false)
+
+    const closeHandlers = {}
+
+    function handleClose() {
+        const key = route.query.versionId ? route.query.show + '/versionId' : route.query.show
+        const handler = closeHandlers[key]
+        if (handler) {
+            const shouldInvoke = !lastClose || (Date.now() - lastClose) > 100
+            console.log('closeHandler', key, shouldInvoke)
+            if (shouldInvoke) {
+                lastClose = Date.now()
+                handler()
+            }
+        }
+    }
+
+    function registerCloseHandler(tab, handler) {
+        closeHandlers[tab] = handler
+    }
 
     function setStatus(msg) {
         refStatus.value = msg
@@ -225,8 +246,18 @@ export function useDeviceInstaller(store, client, device) {
             })
         }
     }
-
+    
+    function urlToNode(node) {
+        return typeof node === 'string' ? {
+            url: node.includes('://') 
+                ? node 
+                : combinePaths('https://github.com', node),
+            name: store.urlToName(node),
+        } : node
+    }
+    
     function isNodeInstalled(node) {
+        node = urlToNode(node)
         if (node.url === 'https://github.com/comfyanonymous/ComfyUI') return true
         if (!device?.installedNodes) return false
 
@@ -236,10 +267,12 @@ export function useDeviceInstaller(store, client, device) {
     }
 
     function isNodeInstalling(node) {
+        node = urlToNode(node)
         return !isNodeInstalled(node) && refDownloads.value.some(x => x.type === Types.Node && x.url === node.url)
     }
 
     function isNodeUninstalling(node) {
+        node = urlToNode(node)
         return isNodeInstalled(node) && refUninstalls.value.some(x => x.type === Types.Node && x.url === node.url)
     }
     
@@ -476,6 +509,8 @@ export function useDeviceInstaller(store, client, device) {
         get monitoring() { return refMonitor.value },
         startMonitor,
         stopMonitor,
+        registerCloseHandler,
+        handleClose,
         
         refStatus,
         get status() { return refStatus.value ?? '' },
@@ -504,6 +539,7 @@ export function useDeviceInstaller(store, client, device) {
         addUninstall,
         removeUninstall,
 
+        urlToNode,
         installNode,
         installCustomNode,
         uninstallNode,

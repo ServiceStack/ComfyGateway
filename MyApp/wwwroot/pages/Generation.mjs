@@ -8,6 +8,7 @@ import VisibilityIcon from "./components/VisibilityIcon.mjs"
 import ArtifactMenu from "./components/ArtifactMenu.mjs"
 import ArtifactReactions from "./components/ArtifactReactions.mjs"
 import RatingsBadge from "./components/RatingsBadge.mjs"
+import AudioPlayer from "./components/AudioPlayer.mjs"
 
 export default {
     components: {
@@ -17,6 +18,7 @@ export default {
         ArtifactMenu,
         ArtifactReactions,
         RatingsBadge,
+        AudioPlayer,
     },
     template:`
         <ErrorSummary :status="error" />
@@ -41,63 +43,76 @@ export default {
                          :style="selectedArtifact.color ? 'background-color:' + selectedArtifact.color : ''"
                          @contextmenu.prevent.stop="showContextMenu($event, selectedArtifact)"
                          >
-                        <!-- Main Image - only show if rating is viewable -->
-                        <img v-if="selectedUrl && store.isRatingViewable(selectedArtifact)"
-                             :src="selectedUrl"
-                             :alt="selectedArtifact.caption || generation.description || 'Generated image'"
-                             class="max-w-full max-h-full object-contain"
-                             :class="{ 'cursor-zoom-in': !store.prefs.zoomIn, 'cursor-zoom-out':store.prefs.zoomIn }"
-                             @click="store.setPrefs({ zoomIn: !store.prefs.zoomIn })">
-                        <div v-else-if="selectedUrl && selectedArtifact"
-                             class="h-full w-full bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-8">
+                        <div v-if="isType('Audio')" class="w-full cursor-pointer"
+                             @click.stop="refAudio?.player?.toggle()"
+                          >
+                          <img src="/img/bg-audio.svg" class="absolute top-0 left-0 h-20 w-full">
+                          
+                          <svg class="my-12 mx-auto size-64 text-purple-600 dark:text-purple-400 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                          </svg>
+                          
+                          <AudioPlayer ref="refAudio" :src="selectedUrl" :clsFilter="cls => cls.replace('dark:bg-black/70', 'dark:bg-black/20')"/>
+                        </div>
+                        <template v-else>
+                          <!-- Main Image - only show if rating is viewable -->
+                          <img v-if="selectedUrl && store.isRatingViewable(selectedArtifact)"
+                               :src="selectedUrl"
+                               :alt="selectedArtifact.caption || generation.description || 'Generated image'"
+                               class="max-w-full max-h-full object-contain"
+                               :class="{ 'cursor-zoom-in': !store.prefs.zoomIn, 'cursor-zoom-out':store.prefs.zoomIn }"
+                               @click="store.setPrefs({ zoomIn: !store.prefs.zoomIn })">
+                          <div v-else-if="selectedUrl && selectedArtifact"
+                               class="h-full w-full bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-8">
                             <!-- Ratings Guard Overlay -->
                             <div class="text-center max-w-lg">
-                                <!-- Large Rating Tag -->
-                                <div class="flex justify-center mb-6">
-                                    <RatingsBadge :artifact="selectedArtifact" size="lg" />
-                                </div>
-                                <h3 class="text-xl font-semibold mb-3">Restricted Content</h3>
-                                <p class="text-sm text-gray-300 mb-4">
-                                    This image is not within your current viewable ratings.
-                                </p>
-                                <div class="flex justify-center items-center">                    
-                                    <VisibilityIcon>Adjust Visibility Ratings</VisibilityIcon>
-                                </div>
+                              <!-- Large Rating Tag -->
+                              <div class="flex justify-center mb-6">
+                                <RatingsBadge :artifact="selectedArtifact" size="lg" />
+                              </div>
+                              <h3 class="text-xl font-semibold mb-3">Restricted Content</h3>
+                              <p class="text-sm text-gray-300 mb-4">
+                                This image is not within your current viewable ratings.
+                              </p>
+                              <div class="flex justify-center items-center">
+                                <VisibilityIcon>Adjust Visibility Ratings</VisibilityIcon>
+                              </div>
                             </div>
-                        </div>
-                        <div v-else class="text-gray-400 dark:text-gray-500">
+                          </div>
+                          <div v-else class="text-gray-400 dark:text-gray-500">
                             <svg class="w-16 h-16" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+                              <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
                             </svg>
-                        </div>
+                          </div>
+                        </template>
                     </div>
                     <ArtifactReactions class="my-1 max-w-sm mx-auto" :artifact="selectedArtifact" @changed="selectedArtifact.reactions = $event.reactions" />
                 </div>
 
-              <!-- Artifact Gallery -->
-              <div v-if="artifacts.length > 1" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Generation Artifacts</h3>
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <div v-for="artifact in artifacts" :key="artifact.id"
-                       class="bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-blue-500 relative"
-                       :class="{ 'ring-2 ring-blue-500': artifact.url === selectedUrl }"
-                       @click="selectedUrl = artifact.url">
-                    <img v-if="store.isRatingViewable(artifact)"
-                         :src="artifact.url"
-                         :alt="'Artifact ' + artifact.id"
-                         class="w-full object-cover">
-
-                    <!-- Ratings Guard for Thumbnails -->
-                    <div v-else class="w-full h-full py-8 text-center bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-2">
-                      <!-- Large Rating Tag -->
-                      <div class="flex justify-center mb-2">
-                        <RatingsBadge :artifact="artifact" />
+                <!-- Artifact Gallery -->
+                <div v-if="artifacts.length > 1" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Generation Artifacts</h3>
+                  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <div v-for="artifact in artifacts" :key="artifact.id"
+                           class="bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-blue-500 relative"
+                           :class="{ 'ring-2 ring-blue-500': artifact.url === selectedUrl }"
+                           @click="selectedUrl = artifact.url">
+                      <img v-if="store.isRatingViewable(artifact)"
+                             :src="artifact.url"
+                             :alt="'Artifact ' + artifact.id"
+                             class="w-full object-cover">
+    
+                        <!-- Ratings Guard for Thumbnails -->
+                      <div v-else class="w-full h-full py-8 text-center bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-2">
+                        <!-- Large Rating Tag -->
+                        <div class="flex justify-center mb-2">
+                          <RatingsBadge :artifact="artifact" />
+                        </div>
+                        <span class="text-xs text-gray-400">Restricted Content</span>
                       </div>
-                      <span class="text-xs text-gray-400">Restricted Content</span>
                     </div>
                   </div>
                 </div>
-              </div>
               
                 <div v-if="selectedArtifact?.description" class="p-4 text-sm text-gray-600 dark:text-gray-400">
                     {{selectedArtifact.description}}
@@ -235,7 +250,7 @@ export default {
                         </div>
                         <div class="mt-2 flex items-center">
                             
-                            <RouterLink :to="{ path:'/images', query: { similar: selectedArtifact.id } }"
+                            <RouterLink v-if="isType('Image')" :to="{ path:'/images', query: { similar: selectedArtifact.id } }"
                                 class="flex items-center gap-x-1 text-sm text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400"
                                 title="Explore Similar Images">
                                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"></path></svg>
@@ -419,6 +434,7 @@ export default {
         const { formatDate } = useFormatters()
         const { copyText } = useUtils()
 
+        const refAudio = ref()
         const generation = ref()
         const artifacts = ref([])
         const variants = ref([])
@@ -454,6 +470,15 @@ export default {
             y: 0,
             image: null
         })
+
+        function isType(type) {
+            if (!selectedArtifact.value) return null
+            return typeof type === 'string'
+                ? selectedArtifact.value.type === type
+                : Array.isArray(type)
+                    ? type.includes(selectedArtifact.value.type)
+                    : false
+        }
 
         function formatFieldName(field) {
             return field.replace('_', ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())
@@ -581,8 +606,8 @@ export default {
         
 
         // Menu functions
-        function toggleMenu(event, image) {
-            if (menu.value.show && menu.value.image === image) {
+        function toggleMenu(event, artifact) {
+            if (menu.value.show && menu.value.image === artifact) {
                 closeMenu()
             } else {
                 // Position menu below and to the left of the button
@@ -591,17 +616,17 @@ export default {
                     show: true,
                     x: rect.right - 200, // Position menu to the left of the button
                     y: rect.top + 40, // Position below the button
-                    image: image
+                    artifact,
                 }
             }
         }
-        function showContextMenu(event, image) {
+        function showContextMenu(event, artifact) {
             // Position menu at cursor location for right-click
             menu.value = {
                 show: true,
                 x: event.clientX,
                 y: event.clientY,
-                image: image
+                artifact,
             }
         }
         function closeMenu() {
@@ -619,10 +644,16 @@ export default {
             }
         }
 
+        function isPlaying(audio) {
+            return refAudio.value?.player?.isPlaying && playAudio.value === audio
+        }
+        
+
         return {
             Q:$1,
             store,
             error,
+            refAudio,
             menu,
             generation,
             artifacts,
@@ -653,6 +684,8 @@ export default {
             handleKeydown,
             getHDClass,
             getRatingColorClass,
+            isType,
+            isPlaying,
         }
     }
 }

@@ -792,76 +792,44 @@ public class ComfyWorkflowParser
         return workflowInfo;
     }
 
+    // Rules for determining workflow input type 
+    public static List<(string[], ComfyPrimarySource)> InputSourceMappings { get; set; } =
+    [
+        (["LoadImage"], ComfyPrimarySource.Image),
+        (["TextEncodeAceStepAudio"], ComfyPrimarySource.Text),
+        (["LoadAudio","TT-LoadAudio"], ComfyPrimarySource.Audio),
+        (["LoadVideo","TT-LoadVideoAudio"], ComfyPrimarySource.Video),
+        (["CLIPTextEncode", "CLIPTextEncodeSDXL", "ImpactWildcardEncode"], ComfyPrimarySource.Text),
+    ];
+
+    // Rules for determining workflow output type 
+    public static List<(string[], ComfyPrimarySource)> OutputSourceMappings { get; set; } =
+    [
+        (["PreviewImage", "SaveImage"], ComfyPrimarySource.Image),
+        (["SaveAudio", "SaveAudioMP3", "SaveAudioOpus"], ComfyPrimarySource.Audio),
+        (["SaveVideo", "SaveWEBM","SaveAnimatedWEBP"], ComfyPrimarySource.Video),
+        (["SaveText|pysssss","TT-WhisperTranscription"], ComfyPrimarySource.Text),
+        (["VAEDecode"], ComfyPrimarySource.Image),
+        (["VAEDecodeAudio"], ComfyPrimarySource.Audio),
+        (["WanImageToVideo"], ComfyPrimarySource.Video),
+    ];
+
     private static WorkflowInfo CreateWorkflowInfo(string workflowName, List<Dictionary<string, object?>> nodes)
     {
         ComfyWorkflowType? workflowType = null;
         ComfyPrimarySource? inputSource = null;
         ComfyPrimarySource? outputSource = null;
 
+        var nodeTypes = new HashSet<string>();
         foreach (var node in nodes)
         {
             if (node.GetValueOrDefault("type") is not string nodeType) continue;
 
-            // If has LoadImage then inputSource is Image
-            if (nodeType == "LoadImage")
-            {
-                inputSource = ComfyPrimarySource.Image;
-            }
-            else if (nodeType.Contains("LoadAudio"))
-            {
-                inputSource = ComfyPrimarySource.Audio;
-            }
-            else if (nodeType.Contains("LoadVideo"))
-            {
-                inputSource = ComfyPrimarySource.Video;
-            }
-
-            if (nodeType == "VAEDecode")
-            {
-                //If has VAEDecode then outputSource is Image
-                outputSource = ComfyPrimarySource.Image;
-            }
-            else if (nodeType == "VAEDecodeAudio")
-            {
-                //If has VAEDecodeAudio then outputSource is Image
-                outputSource = ComfyPrimarySource.Audio;
-            }
-            else if (nodeType == "ShowText|pysssss")
-            {
-                //If has ShowText|pysssss then outputSource could be Text
-                outputSource = ComfyPrimarySource.Text;
-            }
-            else if (nodeType is "PreviewImage" or "SaveImage")
-            {
-                // If has PreviewImage or SaveImage then outputSource is Image
-                outputSource = ComfyPrimarySource.Image;
-            }
-            else if (nodeType == "SaveWEBM")
-            {
-                // If has SaveWEBM then outputSource is Video
-                outputSource = ComfyPrimarySource.Video;
-            }
+            nodeTypes.Add(nodeType);
         }
-
-        // Fallback to check for CLIPTextEncode for text prompts
-        if (inputSource == null)
-        {
-            foreach (var node in nodes)
-            {
-                if (node.GetValueOrDefault("type") is not string nodeType) continue;
-
-                // If has CLIPTextEncode then inputSource is Text
-                if (nodeType is 
-                    "CLIPTextEncode" 
-                    or "CLIPTextEncodeSDXL"
-                    or "ImpactWildcardEncode" // comfyui-impact-pack
-                   )
-                {
-                    inputSource = ComfyPrimarySource.Text;
-                    break;
-                }
-            }
-        }
+        
+        inputSource = InputSourceMappings.FirstOrDefault(x => x.Item1.Any(y => nodeTypes.Contains(y))).Item2;
+        outputSource = OutputSourceMappings.FirstOrDefault(x => x.Item1.Any(y => nodeTypes.Contains(y))).Item2;
 
         if (inputSource == ComfyPrimarySource.Text)
         {
@@ -894,6 +862,10 @@ public class ComfyWorkflowParser
             if (outputSource == ComfyPrimarySource.Text)
             {
                 workflowType = ComfyWorkflowType.AudioToText;
+            }
+            else if (outputSource == ComfyPrimarySource.Audio)
+            {
+                workflowType = ComfyWorkflowType.AudioToAudio;
             }
         }
         else if (inputSource == ComfyPrimarySource.Video)

@@ -8,14 +8,14 @@ namespace MyApp.ServiceInterface;
 
 public interface IComfyWorkflowConverter
 {
-    Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, string? clientId=null);
+    Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, ComfyAgent? agent=null, string? clientId=null);
 }
 
 public record class ApiPromptResult(ApiPrompt ApiPrompt, Dictionary<string, object?> Workflow, string apiPromptJson);
 
 public class CSharpComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> log, AppData appData) : IComfyWorkflowConverter
 {
-    public Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, string? clientId = null)
+    public Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, ComfyAgent? agent=null, string? clientId = null)
     {
         var workflow = workflowVersion.Workflow;
         var workflowInfo = workflowVersion.Info;
@@ -24,15 +24,15 @@ public class CSharpComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> 
             var result = ComfyWorkflowParser.MergeWorkflow(workflow, args, workflowInfo);
             workflow = result.Result;
         }
-        var apiPrompt = CreateApiPrompt(workflow, args, clientId);
+        var apiPrompt = CreateApiPrompt(workflow, args, agent, clientId);
         return Task.FromResult(new ApiPromptResult(apiPrompt, workflow, apiPrompt.ToJson()));
     }
 
-    public ApiPrompt CreateApiPrompt(Dictionary<string, object?> workflow, Dictionary<string,object?> args, string? clientId=null) 
+    public ApiPrompt CreateApiPrompt(Dictionary<string, object?> workflow, Dictionary<string,object?> args, ComfyAgent? agent=null, string? clientId=null) 
     {
         var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflow, log);
         var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflow, log);
-        var nodeDefs = appData.GetSupportedNodeDefinitions(requiredNodes, requiredAssets);
+        var nodeDefs = appData.GetSupportedNodeDefinitions(requiredNodes, requiredAssets, agent);
         var apiPrompt = ComfyConverters.ConvertWorkflowToApiPrompt(workflow, nodeDefs, clientId, log:log);
         return apiPrompt;
     }
@@ -45,7 +45,7 @@ public class CSharpComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> 
 /// <param name="appData"></param>
 public class CSharpPromptComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConverter> log, AppData appData) : IComfyWorkflowConverter
 {
-    public Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, string? clientId = null)
+    public Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, ComfyAgent? agent=null, string? clientId = null)
     {
         var workflow = workflowVersion.Workflow;
         var workflowInfo = workflowVersion.Info;
@@ -80,12 +80,12 @@ public class CSharpPromptComfyWorkflowConverter(ILogger<CSharpComfyWorkflowConve
 public class NodeComfyWorkflowConverter(ILogger<NodeComfyWorkflowConverter> log, AppData appData) 
     : IComfyWorkflowConverter
 {
-    public async Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, string? clientId = null)
+    public async Task<ApiPromptResult> CreateApiPromptAsync(WorkflowVersion workflowVersion, Dictionary<string, object?> args, ComfyAgent? agent=null, string? clientId = null)
     {
         var workflow = workflowVersion.Workflow;
         var requiredNodes = ComfyWorkflowParser.ExtractNodeTypes(workflow, log);
         var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflow, log);
-        var agent = appData.GetSupportedAgent(requiredNodes, requiredAssets);
+        agent ??= appData.GetSupportedAgent(requiredNodes, requiredAssets);
         var nodeDefinitionPath = agent != null
             ? appData.GetDeviceObjectInfoPath(agent.DeviceId)
             : appData.DefaultObjectInfoPath;

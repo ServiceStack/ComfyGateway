@@ -1,5 +1,5 @@
 /* Options:
-Date: 2025-08-01 15:53:13
+Date: 2025-08-11 11:40:28
 Version: 8.81
 Tip: To override a DTO option, remove "//" prefix before updating
 BaseUrl: https://localhost:5001
@@ -102,7 +102,7 @@ export class ObjectDetection {
     box = [];
 }
 export class ComfyAssetOutput {
-    /** @param {{nodeId?:string,url?:string,type?:AssetType,fileName?:string,width?:number,height?:number,length?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },objects?:ObjectDetection[],phash?:string,color?:string}} [init] */
+    /** @param {{nodeId?:string,url?:string,type?:AssetType,fileName?:string,width?:number,height?:number,length?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },objects?:ObjectDetection[],phash?:string,color?:string,codec?:string,duration?:number,bitrate?:number,streams?:number,programs?:number}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     nodeId;
@@ -132,6 +132,16 @@ export class ComfyAssetOutput {
     phash;
     /** @type {?string} */
     color;
+    /** @type {?string} */
+    codec;
+    /** @type {?number} */
+    duration;
+    /** @type {?number} */
+    bitrate;
+    /** @type {?number} */
+    streams;
+    /** @type {?number} */
+    programs;
 }
 export class WorkflowResult {
     /** @param {{clientId?:string,duration?:string,texts?:ComfyTextOutput[],assets?:ComfyAssetOutput[]}} [init] */
@@ -242,6 +252,16 @@ export class GpuInfo {
     free;
     /** @type {number} */
     used;
+}
+export class ComfyAgentConfig {
+    /** @param {{installModels?:boolean,installNodes?:boolean,installPackages?:boolean}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {?boolean} */
+    installModels;
+    /** @type {?boolean} */
+    installNodes;
+    /** @type {?boolean} */
+    installPackages;
 }
 export class OllamaGenerateResponse {
     /** @param {{model?:string,created_at?:number,response?:string,done?:boolean,done_reason?:string,total_duration?:number,load_duration?:number,prompt_eval_count?:number,prompt_eval_duration?:number,eval_count?:number,prompt_tokens?:number,context?:number[],responseStatus?:ResponseStatus}} [init] */
@@ -468,9 +488,10 @@ export var ReportTag;
     ReportTag["IncorrectOrMisleadingContent"] = "IncorrectOrMisleadingContent"
     ReportTag["OtherConcern"] = "OtherConcern"
 })(ReportTag || (ReportTag = {}));
-/** @typedef {'SDXL'|'SD 1.x'|'SD 2.x'|'SD 3'|'SD 3.5'|'SD 3.5 Medium'|'SD 3.5 Large'|'SD 3.5 Large Turbo'|'Pony'|'FLUX.1 schnell'|'Flux.1 dev'|'Flux.1 Kontext'|'HiDream'|'AuraFlow'|'SDXL Lightning'|'SVD'|'PixArt-α'|'PixArt-Σ'|'Hunyuan 1.x'|'HunyuanVideo'|'Lumina'|'Kolors'|'Illustrious'|'Mochi'|'LTXV'|'CogVideoX'|'NoobAI'|'WanVideo 1.3B'|'WanVideo 14B'|'WanVideo 14B 480p'|'WanVideo 14B 720p'|'Other'} */
+/** @typedef {'AuraFlow'|'SDXL'|'SD 1.x'|'SD 2.x'|'SD 3'|'SD 3.5'|'SD 3.5 Medium'|'SD 3.5 Large'|'SD 3.5 Large Turbo'|'SDXL Lightning'|'StableAudio'|'Stable Video Diffusion'|'FLUX.1 Schnell'|'Flux.1 Dev'|'Flux.1 Kontext'|'HiDream'|'QwenImage'|'Hunyuan1'|'HunyuanVideo'|'Lumina'|'Pony'|'NoobAI'|'Illustrious'|'PixArt-α'|'PixArt-Σ'|'Hunyuan 1.x'|'Mochi'|'LTXV'|'CogVideoX'|'WanVideo 1.3B'|'WanVideo 14B'|'WanVideo 14B 480p'|'WanVideo 14B 720p'|'Other'} */
 export var BaseModel;
 (function (BaseModel) {
+    BaseModel["AuraFlow"] = "AuraFlow"
     BaseModel["SDXL"] = "SDXL"
     BaseModel["SD1"] = "SD 1.x"
     BaseModel["SD2"] = "SD 2.x"
@@ -479,25 +500,26 @@ export var BaseModel;
     BaseModel["SD35Medium"] = "SD 3.5 Medium"
     BaseModel["SD35Large"] = "SD 3.5 Large"
     BaseModel["SD35LargeTurbo"] = "SD 3.5 Large Turbo"
-    BaseModel["Pony"] = "Pony"
-    BaseModel["Flux1S"] = "FLUX.1 schnell"
-    BaseModel["Flux1D"] = "Flux.1 dev"
+    BaseModel["SDXLLightning"] = "SDXL Lightning"
+    BaseModel["StableAudio"] = "StableAudio"
+    BaseModel["SVD"] = "Stable Video Diffusion"
+    BaseModel["Flux1S"] = "FLUX.1 Schnell"
+    BaseModel["Flux1D"] = "Flux.1 Dev"
     BaseModel["Flux1Kontext"] = "Flux.1 Kontext"
     BaseModel["HiDream"] = "HiDream"
-    BaseModel["AuraFlow"] = "AuraFlow"
-    BaseModel["SDXLLightning"] = "SDXL Lightning"
-    BaseModel["SVD"] = "SVD"
-    BaseModel["PixArtA"] = "PixArt-α"
-    BaseModel["PixArtE"] = "PixArt-Σ"
-    BaseModel["Hunyuan1"] = "Hunyuan 1.x"
+    BaseModel["QwenImage"] = "QwenImage"
+    BaseModel["Hunyuan1"] = "Hunyuan1"
     BaseModel["HunyuanVideo"] = "HunyuanVideo"
     BaseModel["Lumina"] = "Lumina"
-    BaseModel["Kolors"] = "Kolors"
+    BaseModel["Pony"] = "Pony"
+    BaseModel["NoobAI"] = "NoobAI"
     BaseModel["Illustrious"] = "Illustrious"
+    BaseModel["PixArtA"] = "PixArt-α"
+    BaseModel["PixArtE"] = "PixArt-Σ"
+    BaseModel["Kolors"] = "Hunyuan 1.x"
     BaseModel["Mochi"] = "Mochi"
     BaseModel["LTXV"] = "LTXV"
     BaseModel["CogVideoX"] = "CogVideoX"
-    BaseModel["NoobAI"] = "NoobAI"
     BaseModel["WanVideo13B"] = "WanVideo 1.3B"
     BaseModel["WanVideo14B"] = "WanVideo 14B"
     BaseModel["WanVideo14B480p"] = "WanVideo 14B 480p"
@@ -511,6 +533,12 @@ export var AgentCommands;
     AgentCommands["Register"] = "Register"
     AgentCommands["Reboot"] = "Reboot"
 })(AgentCommands || (AgentCommands = {}));
+export class Poco {
+    /** @param {{name?:string}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {string} */
+    name;
+}
 export class Thread extends AuditBase {
     /** @param {{id?:number,url?:string,description?:string,externalRef?:string,viewCount?:number,likesCount?:number,commentsCount?:number,args?:{ [index:string]: Object; },refId?:number,refIdStr?:string,closedDate?:string,reactions?:{ [index:string]: number; },reactionsCount?:number,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
@@ -698,7 +726,7 @@ export class Booking extends AuditBase {
     /** @type {User} */
     employee;
 }
-/** @typedef {'TextToImage'|'ImageToImage'|'ImageToText'|'TextToAudio'|'TextToVideo'|'TextTo3D'|'AudioToText'|'VideoToText'|'ImageToVideo'} */
+/** @typedef {'TextToImage'|'ImageToImage'|'ImageToText'|'TextToAudio'|'TextToVideo'|'TextTo3D'|'AudioToText'|'AudioToAudio'|'VideoToText'|'ImageToVideo'} */
 export var ComfyWorkflowType;
 (function (ComfyWorkflowType) {
     ComfyWorkflowType["TextToImage"] = "TextToImage"
@@ -708,6 +736,7 @@ export var ComfyWorkflowType;
     ComfyWorkflowType["TextToVideo"] = "TextToVideo"
     ComfyWorkflowType["TextTo3D"] = "TextTo3D"
     ComfyWorkflowType["AudioToText"] = "AudioToText"
+    ComfyWorkflowType["AudioToAudio"] = "AudioToAudio"
     ComfyWorkflowType["VideoToText"] = "VideoToText"
     ComfyWorkflowType["ImageToVideo"] = "ImageToVideo"
 })(ComfyWorkflowType || (ComfyWorkflowType = {}));
@@ -1026,10 +1055,18 @@ export class AgentEvent {
     args;
 }
 export class ComfyAgentSettings {
-    /** @param {{preserveOutputs?:boolean}} [init] */
+    /** @param {{inDevicePool?:boolean,preserveOutputs?:boolean,maxBatchSize?:number,maxAudioSecs?:number,maxVideoSecs?:number}} [init] */
     constructor(init) { Object.assign(this, init) }
-    /** @type {?boolean} */
+    /** @type {boolean} */
+    inDevicePool;
+    /** @type {boolean} */
     preserveOutputs;
+    /** @type {number} */
+    maxBatchSize;
+    /** @type {number} */
+    maxAudioSecs;
+    /** @type {number} */
+    maxVideoSecs;
 }
 export class OllamaGenerateOptions {
     /** @param {{mirostat?:number,mirostat_eta?:number,mirostat_tau?:number,num_ctx?:number,repeat_last_n?:number,repeat_penalty?:number,temperature?:number,seed?:number,stop?:string,num_predict?:number,top_k?:number,top_p?:number,min_p?:number}} [init] */
@@ -1142,6 +1179,16 @@ export class OpenAiTools {
      * @description The type of the tool. Currently, only function is supported. */
     type;
 }
+export class CategoryStat {
+    /** @param {{id?:number,name?:string,count?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    id;
+    /** @type {string} */
+    name;
+    /** @type {number} */
+    count;
+}
 /** @typedef T {any} */
 export class QueryResponse {
     /** @param {{offset?:number,total?:number,results?:T[],meta?:{ [index:string]: string; },responseStatus?:ResponseStatus}} [init] */
@@ -1156,6 +1203,22 @@ export class QueryResponse {
     meta;
     /** @type {?ResponseStatus} */
     responseStatus;
+}
+export class AudioInfo {
+    /** @param {{codec?:string,duration?:number,length?:number,bitrate?:number,streams?:number,programs?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {?string} */
+    codec;
+    /** @type {?number} */
+    duration;
+    /** @type {?number} */
+    length;
+    /** @type {?number} */
+    bitrate;
+    /** @type {?number} */
+    streams;
+    /** @type {?number} */
+    programs;
 }
 export class AgentInfo {
     /** @param {{id?:number,shortId?:string,userId?:string,gpus?:GpuInfo[],nodes?:string[],models?:{ [index:string]: string[]; },languageModels?:string[],requirePip?:string[],requireNodes?:string[],requireModels?:string[],installedPip?:string[],installedNodes?:string[],installedModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number,devicePool?:string}} [init] */
@@ -1231,7 +1294,7 @@ export class AiTaskInfo {
     errorCode;
 }
 export class OwnerAgentInfo extends AgentInfo {
-    /** @param {{deviceId?:string,userId?:string,userName?:string,lastIp?:string,downloading?:string,downloaded?:string,downloadFailed?:string,status?:string,id?:number,shortId?:string,userId?:string,gpus?:GpuInfo[],nodes?:string[],models?:{ [index:string]: string[]; },languageModels?:string[],requirePip?:string[],requireNodes?:string[],requireModels?:string[],installedPip?:string[],installedNodes?:string[],installedModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number,devicePool?:string}} [init] */
+    /** @param {{deviceId?:string,userId?:string,userName?:string,lastIp?:string,status?:string,settings?:ComfyAgentSettings,id?:number,shortId?:string,userId?:string,gpus?:GpuInfo[],nodes?:string[],models?:{ [index:string]: string[]; },languageModels?:string[],requirePip?:string[],requireNodes?:string[],requireModels?:string[],installedPip?:string[],installedNodes?:string[],installedModels?:string[],enabled?:boolean,offlineDate?:string,createdDate?:string,modifiedDate?:string,lastUpdate?:string,queueCount?:number,devicePool?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {string} */
     deviceId;
@@ -1242,13 +1305,9 @@ export class OwnerAgentInfo extends AgentInfo {
     /** @type {?string} */
     lastIp;
     /** @type {?string} */
-    downloading;
-    /** @type {?string} */
-    downloaded;
-    /** @type {?string} */
-    downloadFailed;
-    /** @type {?string} */
     status;
+    /** @type {ComfyAgentSettings} */
+    settings;
 }
 export class ComfyTask {
     /** @param {{id?:number,name?:string}} [init] */
@@ -1308,6 +1367,16 @@ export class DeletedRow {
     /** @type {string} */
     key;
 }
+export class StringsResponse {
+    /** @param {{results?:string[],meta?:{ [index:string]: string; },responseStatus?:ResponseStatus}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {string[]} */
+    results = [];
+    /** @type {?{ [index:string]: string; }} */
+    meta;
+    /** @type {?ResponseStatus} */
+    responseStatus;
+}
 export class StringResponse {
     /** @param {{result?:string,meta?:{ [index:string]: string; },responseStatus?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
@@ -1328,18 +1397,8 @@ export class HardDeleteGenerationsResponse {
     /** @type {?ResponseStatus} */
     responseStatus;
 }
-export class StringsResponse {
-    /** @param {{results?:string[],meta?:{ [index:string]: string; },responseStatus?:ResponseStatus}} [init] */
-    constructor(init) { Object.assign(this, init) }
-    /** @type {string[]} */
-    results = [];
-    /** @type {?{ [index:string]: string; }} */
-    meta;
-    /** @type {?ResponseStatus} */
-    responseStatus;
-}
 export class Artifact extends AuditBase {
-    /** @param {{id?:number,generationId?:string,type?:AssetType,url?:string,length?:number,width?:number,height?:number,resolution?:number,versionId?:number,workflowId?:number,threadId?:number,credits?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },reactions?:{ [index:string]: number; },reactionsCount?:number,phash?:string,color?:string,caption?:string,description?:string,publishedBy?:string,publishedDate?:string,variantId?:number,variantName?:string,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
+    /** @param {{id?:number,generationId?:string,type?:AssetType,url?:string,length?:number,width?:number,height?:number,resolution?:number,versionId?:number,workflowId?:number,threadId?:number,credits?:number,rating?:Rating,ratings?:Ratings,tags?:{ [index:string]: number; },categories?:{ [index:string]: number; },reactions?:{ [index:string]: number; },reactionsCount?:number,phash?:string,color?:string,caption?:string,description?:string,audio?:AudioInfo,publishedBy?:string,publishedDate?:string,variantId?:number,variantName?:string,createdDate?:string,createdBy?:string,modifiedDate?:string,modifiedBy?:string,deletedDate?:string,deletedBy?:string}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {number} */
     id;
@@ -1385,6 +1444,8 @@ export class Artifact extends AuditBase {
     caption;
     /** @type {?string} */
     description;
+    /** @type {?AudioInfo} */
+    audio;
     /** @type {?string} */
     publishedBy;
     /** @type {?string} */
@@ -1616,6 +1677,14 @@ export class OpenAiChat {
      * @description A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse. */
     user;
 }
+export class GetPopularCategoriesResponse {
+    /** @param {{results?:CategoryStat[],responseStatus?:ResponseStatus}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {CategoryStat[]} */
+    results = [];
+    /** @type {?ResponseStatus} */
+    responseStatus;
+}
 export class GetAppDataResponse {
     /** @param {{assetCount?:number,workflowCount?:number,agentEventCounts?:{ [index:string]: number; },agents?:AgentInfo[],queuedAiTasks?:AiTaskInfo[],defaultGatewayNodes?:string[],responseStatus?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
@@ -1631,6 +1700,14 @@ export class GetAppDataResponse {
     queuedAiTasks = [];
     /** @type {string[]} */
     defaultGatewayNodes = [];
+    /** @type {?ResponseStatus} */
+    responseStatus;
+}
+export class UpdateComfyAgentSettingsResponse {
+    /** @param {{result?:OwnerAgentInfo,responseStatus?:ResponseStatus}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {OwnerAgentInfo} */
+    result;
     /** @type {?ResponseStatus} */
     responseStatus;
 }
@@ -1729,7 +1806,7 @@ export class UpdateWorkflowVersionResponse {
     responseStatus;
 }
 export class ParsedWorkflow {
-    /** @param {{baseModel?:string,version?:string,name?:string,category?:string,path?:string,nodes?:string[],assets?:string[],requiresAssets?:string[],requiresCustomNodes?:string[],requiresPipPackages?:string[],info?:WorkflowInfo,workflow?:{ [index:string]: Object; }}} [init] */
+    /** @param {{baseModel?:string,version?:string,name?:string,category?:string,path?:string,nodes?:string[],assets?:string[],requiresAssets?:string[],requiresCustomNodes?:string[],requiresPipPackages?:string[],info?:WorkflowInfo,workflow?:{ [index:string]: Object; },apiPrompt?:{ [index:string]: ApiNode; }}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     baseModel;
@@ -1755,6 +1832,8 @@ export class ParsedWorkflow {
     info;
     /** @type {{ [index:string]: Object; }} */
     workflow = {};
+    /** @type {?{ [index:string]: ApiNode; }} */
+    apiPrompt;
 }
 export class UploadNewWorkflowResponse {
     /** @param {{versionId?:number,nodes?:string[],assets?:string[],info?:WorkflowInfo,responseStatus?:ResponseStatus}} [init] */
@@ -1787,7 +1866,7 @@ export class FindCustomNodesResponse {
     responseStatus;
 }
 export class GetDeviceStatusResponse {
-    /** @param {{deviceId?:string,modifiedDate?:string,requirePip?:string[],requireNodes?:string[],requireModels?:string[],nodes?:string[],checkpoints?:string[],clip?:string[],clipVision?:string[],configs?:string[],controlnet?:string[],diffusers?:string[],diffusionModels?:string[],embeddings?:string[],gligen?:string[],hypernetworks?:string[],loras?:string[],photomaker?:string[],styleModels?:string[],upscaleModels?:string[],vae?:string[],vaeApprox?:string[],downloading?:string,downloaded?:string,downloadFailed?:string,status?:string,logs?:string,error?:ResponseStatus,responseStatus?:ResponseStatus,models?:{ [index:string]: string[]; },languageModels?:string[]}} [init] */
+    /** @param {{deviceId?:string,modifiedDate?:string,requirePip?:string[],requireNodes?:string[],requireModels?:string[],installedPip?:string[],installedNodes?:string[],installedModels?:string[],nodes?:string[],models?:{ [index:string]: string[]; },languageModels?:string[],status?:string,logs?:string,error?:ResponseStatus,responseStatus?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
@@ -1799,46 +1878,18 @@ export class GetDeviceStatusResponse {
     requireNodes;
     /** @type {?string[]} */
     requireModels;
+    /** @type {?string[]} */
+    installedPip;
+    /** @type {?string[]} */
+    installedNodes;
+    /** @type {?string[]} */
+    installedModels;
     /** @type {string[]} */
     nodes = [];
-    /** @type {string[]} */
-    checkpoints = [];
-    /** @type {string[]} */
-    clip = [];
-    /** @type {string[]} */
-    clipVision = [];
-    /** @type {string[]} */
-    configs = [];
-    /** @type {string[]} */
-    controlnet = [];
-    /** @type {string[]} */
-    diffusers = [];
-    /** @type {string[]} */
-    diffusionModels = [];
-    /** @type {string[]} */
-    embeddings = [];
-    /** @type {string[]} */
-    gligen = [];
-    /** @type {string[]} */
-    hypernetworks = [];
-    /** @type {string[]} */
-    loras = [];
-    /** @type {string[]} */
-    photomaker = [];
-    /** @type {string[]} */
-    styleModels = [];
-    /** @type {string[]} */
-    upscaleModels = [];
-    /** @type {string[]} */
-    vae = [];
-    /** @type {string[]} */
-    vaeApprox = [];
-    /** @type {?string} */
-    downloading;
-    /** @type {?string} */
-    downloaded;
-    /** @type {?string} */
-    downloadFailed;
+    /** @type {{ [index:string]: string[]; }} */
+    models = {};
+    /** @type {?string[]} */
+    languageModels;
     /** @type {?string} */
     status;
     /** @type {?string} */
@@ -1847,10 +1898,6 @@ export class GetDeviceStatusResponse {
     error;
     /** @type {?ResponseStatus} */
     responseStatus;
-    /** @type {{ [index:string]: string[]; }} */
-    models = {};
-    /** @type {?string[]} */
-    languageModels;
 }
 export class DeleteFilesResponse {
     /** @param {{deleted?:string[],missing?:string[],failed?:string[],responseStatus?:ResponseStatus}} [init] */
@@ -1895,6 +1942,51 @@ export class GetCategoryArtifactIdsResponse {
     results = [];
     /** @type {?ResponseStatus} */
     responseStatus;
+}
+export class TestUpload {
+    /** @param {{int?:number,nullableId?:number,long?:number,double?:number,string?:string,dateTime?:string,intArray?:number[],intList?:number[],stringArray?:string[],stringList?:string[],pocoArray?:Poco[],pocoList?:Poco[],nullableByteArray?:number[],nullableByteList?:number[],nullableDateTimeArray?:string[],nullableDateTimeList?:string[],pocoLookup?:{ [index:string]: Poco[]; },pocoLookupMap?:{ [index:string]: { [index:string]: Poco; }[]; },mapList?:{ [index:string]: string[]; }}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {number} */
+    int;
+    /** @type {?number} */
+    nullableId;
+    /** @type {number} */
+    long;
+    /** @type {number} */
+    double;
+    /** @type {string} */
+    string;
+    /** @type {string} */
+    dateTime;
+    /** @type {number[]} */
+    intArray = [];
+    /** @type {number[]} */
+    intList = [];
+    /** @type {string[]} */
+    stringArray = [];
+    /** @type {string[]} */
+    stringList = [];
+    /** @type {Poco[]} */
+    pocoArray = [];
+    /** @type {Poco[]} */
+    pocoList = [];
+    /** @type {number[]} */
+    nullableByteArray = [];
+    /** @type {number[]} */
+    nullableByteList = [];
+    /** @type {string[]} */
+    nullableDateTimeArray = [];
+    /** @type {string[]} */
+    nullableDateTimeList = [];
+    /** @type {{ [index:string]: Poco[]; }} */
+    pocoLookup = {};
+    /** @type {{ [index:string]: { [index:string]: Poco; }[]; }} */
+    pocoLookupMap = {};
+    /** @type {?{ [index:string]: string[]; }} */
+    mapList;
+    getTypeName() { return 'TestUpload' }
+    getMethod() { return 'POST' }
+    createResponse() { return new TestUpload() }
 }
 export class GetThreadResponse {
     /** @param {{result?:Thread,responseStatus?:ResponseStatus}} [init] */
@@ -1953,6 +2045,26 @@ export class IdResponse {
     id;
     /** @type {?ResponseStatus} */
     responseStatus;
+}
+export class FixGenerations {
+    /** @param {{take?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {?number} */
+    take;
+    getTypeName() { return 'FixGenerations' }
+    getMethod() { return 'POST' }
+    createResponse() { return new StringsResponse() }
+}
+export class UpdateAudioTags {
+    /** @param {{artifactPath?:string,artifactTags?:{ [index:string]: number; }}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {string} */
+    artifactPath;
+    /** @type {{ [index:string]: number; }} */
+    artifactTags = {};
+    getTypeName() { return 'UpdateAudioTags' }
+    getMethod() { return 'POST' }
+    createResponse() { return new StringsResponse() }
 }
 export class HardDeleteWorkflow {
     /** @param {{id?:number,force?:boolean}} [init] */
@@ -2156,22 +2268,28 @@ export class ResizeImages {
     createResponse() { return new StringsResponse() }
 }
 export class UpdateComfyAgent {
-    /** @param {{deviceId?:string,queueCount?:number,gpus?:GpuInfo[],installedPip?:string[],installedNodes?:string[],installedModels?:string[],languageModels?:string[],runningGenerationIds?:string[],queuedGenerationIds?:string[]}} [init] */
+    /** @param {{deviceId?:string,queueCount?:number,status?:string,error?:ResponseStatus,gpus?:GpuInfo[],models?:{ [index:string]: string[]; },languageModels?:string[],installedPip?:string[],installedNodes?:string[],installedModels?:string[],runningGenerationIds?:string[],queuedGenerationIds?:string[]}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
     /** @type {number} */
     queueCount;
+    /** @type {?string} */
+    status;
+    /** @type {?ResponseStatus} */
+    error;
     /** @type {?GpuInfo[]} */
     gpus;
+    /** @type {?{ [index:string]: string[]; }} */
+    models;
+    /** @type {?string[]} */
+    languageModels;
     /** @type {?string[]} */
     installedPip;
     /** @type {?string[]} */
     installedNodes;
     /** @type {?string[]} */
     installedModels;
-    /** @type {?string[]} */
-    languageModels;
     /** @type {?string[]} */
     runningGenerationIds;
     /** @type {?string[]} */
@@ -2181,16 +2299,10 @@ export class UpdateComfyAgent {
     createResponse() { return new EmptyResponse() }
 }
 export class UpdateComfyAgentStatus {
-    /** @param {{deviceId?:string,downloading?:string,downloaded?:string,downloadFailed?:string,status?:string,logs?:string,error?:ResponseStatus}} [init] */
+    /** @param {{deviceId?:string,status?:string,logs?:string,error?:ResponseStatus}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
-    /** @type {?string} */
-    downloading;
-    /** @type {?string} */
-    downloaded;
-    /** @type {?string} */
-    downloadFailed;
     /** @type {?string} */
     status;
     /** @type {?string} */
@@ -2220,7 +2332,7 @@ export class TestGenerations {
     createResponse() { return [] }
 }
 export class RegisterComfyAgent {
-    /** @param {{deviceId?:string,version?:number,comfyVersion?:string,workflows?:string[],queueCount?:number,gpus?:GpuInfo[],languageModels?:string[],installedPip?:string[],installedNodes?:string[],installedModels?:string[]}} [init] */
+    /** @param {{deviceId?:string,version?:number,comfyVersion?:string,workflows?:string[],queueCount?:number,gpus?:GpuInfo[],models?:{ [index:string]: string[]; },languageModels?:string[],installedPip?:string[],installedNodes?:string[],installedModels?:string[],config?:ComfyAgentConfig}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {string} */
     deviceId;
@@ -2234,6 +2346,8 @@ export class RegisterComfyAgent {
     queueCount;
     /** @type {?GpuInfo[]} */
     gpus;
+    /** @type {?{ [index:string]: string[]; }} */
+    models;
     /** @type {?string[]} */
     languageModels;
     /** @type {?string[]} */
@@ -2242,6 +2356,8 @@ export class RegisterComfyAgent {
     installedNodes;
     /** @type {?string[]} */
     installedModels;
+    /** @type {ComfyAgentConfig} */
+    config;
     getTypeName() { return 'RegisterComfyAgent' }
     getMethod() { return 'POST' }
     createResponse() { return new RegisterComfyAgentResponse() }
@@ -2327,8 +2443,19 @@ export class CompleteOpenAiChatTask extends OpenAiChatResponse {
     getMethod() { return 'POST' }
     createResponse() { return new EmptyResponse() }
 }
+export class GetPopularCategories {
+    /** @param {{type?:AssetType,take?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {AssetType} */
+    type;
+    /** @type {?number} */
+    take;
+    getTypeName() { return 'GetPopularCategories' }
+    getMethod() { return 'GET' }
+    createResponse() { return new GetPopularCategoriesResponse() }
+}
 export class QueryArtifacts extends QueryDb_1 {
-    /** @param {{id?:number,search?:string,rating?:Rating,ratings?:Rating[],category?:string,tag?:string,versionId?:number,similar?:number,userId?:string,skip?:number,take?:number,orderBy?:string,orderByDesc?:string,include?:string,fields?:string,meta?:{ [index:string]: string; }}} [init] */
+    /** @param {{id?:number,search?:string,rating?:Rating,ratings?:Rating[],category?:string,tag?:string,versionId?:number,similar?:number,type?:AssetType,userId?:string,skip?:number,take?:number,orderBy?:string,orderByDesc?:string,include?:string,fields?:string,meta?:{ [index:string]: string; }}} [init] */
     constructor(init) { super(init); Object.assign(this, init) }
     /** @type {?number} */
     id;
@@ -2346,6 +2473,8 @@ export class QueryArtifacts extends QueryDb_1 {
     versionId;
     /** @type {?number} */
     similar;
+    /** @type {?AssetType} */
+    type;
     /** @type {?string} */
     userId;
     getTypeName() { return 'QueryArtifacts' }
@@ -2411,6 +2540,21 @@ export class GetAppData {
     getTypeName() { return 'GetAppData' }
     getMethod() { return 'GET' }
     createResponse() { return new GetAppDataResponse() }
+}
+export class UpdateComfyAgentSettings {
+    /** @param {{deviceId?:string,inDevicePool?:boolean,preserveOutputs?:boolean,maxBatchSize?:number}} [init] */
+    constructor(init) { Object.assign(this, init) }
+    /** @type {string} */
+    deviceId;
+    /** @type {?boolean} */
+    inDevicePool;
+    /** @type {?boolean} */
+    preserveOutputs;
+    /** @type {?number} */
+    maxBatchSize;
+    getTypeName() { return 'UpdateComfyAgentSettings' }
+    getMethod() { return 'PATCH' }
+    createResponse() { return new UpdateComfyAgentSettingsResponse() }
 }
 export class DevicePool {
     /** @param {{afterModifiedDate?:string}} [init] */
@@ -2495,7 +2639,7 @@ export class RequeueGeneration {
     createResponse() { return new RequeueGenerationResponse() }
 }
 export class QueueWorkflow {
-    /** @param {{workflowId?:number,versionId?:number,threadId?:number,description?:string,args?:{ [index:string]: Object; }}} [init] */
+    /** @param {{workflowId?:number,versionId?:number,threadId?:number,description?:string,deviceId?:string,args?:{ [index:string]: Object; }}} [init] */
     constructor(init) { Object.assign(this, init) }
     /** @type {number} */
     workflowId;
@@ -2505,6 +2649,8 @@ export class QueueWorkflow {
     threadId;
     /** @type {?string} */
     description;
+    /** @type {?string} */
+    deviceId;
     /** @type {?{ [index:string]: Object; }} */
     args;
     getTypeName() { return 'QueueWorkflow' }

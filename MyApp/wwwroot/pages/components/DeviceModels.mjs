@@ -2,51 +2,9 @@ import { ref, computed, onMounted, inject, watch, onUnmounted, getCurrentInstanc
 import { DeleteModel, InstallAsset, InstallModel } from "../../mjs/dtos.mjs"
 import { SecondaryButton, SelectInput, useClient, useUtils } from "@servicestack/vue"
 import { humanize, lastRightPart, leftPart, rightPart } from "@servicestack/client"
-import { storageObject } from "../lib/utils.mjs";
+import { storageObject, createModelCategories, getFileName, ModelFolders } from "../lib/utils.mjs"
 
 const { unRefs } = useUtils()
-
-const BadgeClasses = [
-    'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
-    'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200',
-    'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
-    'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
-    'bg-lime-100 dark:bg-lime-900 text-lime-800 dark:text-lime-200',
-    'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
-    'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200',
-    'bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200',
-    'bg-cyan-100 dark:bg-cyan-900 text-cyan-800 dark:text-cyan-200',
-    'bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200',
-    'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
-    'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200',
-    'bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200',
-    'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200',
-    'bg-fuchsia-100 dark:bg-fuchsia-900 text-fuchsia-800 dark:text-fuchsia-200',
-    'bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200',
-    'bg-rose-100 dark:bg-rose-900 text-rose-800 dark:text-rose-200',
-    'bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200',
-    'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200',
-    'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200',
-    'bg-neutral-100 dark:bg-neutral-900 text-neutral-800 dark:text-neutral-200',
-    'bg-stone-100 dark:bg-stone-900 text-stone-800 dark:text-stone-200',
-]
-const ModelFolders = [
-    'checkpoints',
-    'clip',
-    'clip_vision',
-    'controlnet',
-    'diffusers',
-    'diffusion_models',
-    'embeddings',
-    'gligen',
-    'hypernetworks',
-    'loras',
-    'photomaker',
-    'style_models',
-    'upscale_models',
-    'vae',
-    'vae_approx',
-]
 
 const DownloadModels = {
     template: `
@@ -604,24 +562,6 @@ export default {
         const deleting = ref({})
         const show = ref('')
 
-        function createModelCategories(device) {
-            function sortFiles(files) {
-                return files.sort((a, b) => {
-                    // If filename has a '/' sort first, otherwise by filename
-                    if (a.includes('/') && !b.includes('/')) return -1
-                    if (!a.includes('/') && b.includes('/')) return 1
-                    return a.localeCompare(b)
-                })
-            }
-            
-            return Object.keys(device.models ?? {}).map((category, i) => ({
-                key: category,
-                name: humanize(category),
-                models: sortFiles(device.models[category] || []),
-                badgeClass: BadgeClasses[i % BadgeClasses.length]
-            }))
-        }
-
         // Model categories with consistent naming and colors
         const modelCategories = computed(() => 
             createModelCategories(installer.device))
@@ -653,13 +593,6 @@ export default {
         const totalModels = computed(() => {
             return visibleCategories.value.reduce((total, cat) => total + cat.models.length, 0)
         })
-
-        // Extract filename from full path
-        function getFileName(filePath) {
-            if (!filePath) return ''
-            // Handle both forward and backward slashes
-            return filePath.replace(/\/|\\/g, ' / ')
-        }
 
         // Toggle category expansion
         function toggleCategory(categoryKey) {

@@ -1,12 +1,11 @@
 import { ref, computed, onMounted, inject, watch } from "vue"
-import { useRoute } from "vue-router"
-import { lastLeftPart, rightPart } from "@servicestack/client"
+import { useRoute, useRouter } from "vue-router"
+import { lastLeftPart, omit, rightPart } from "@servicestack/client"
 import { WorkflowGroups, reactionCounts, pluralize } from "../lib/utils.mjs"
 import { UploadNewWorkflow, BaseModel, DevicePool, MyDevices } from "../../mjs/dtos.mjs"
 import FileUpload from "./FileUpload.mjs"
 import DeviceManagerDialog from "./DeviceManagerDialog.mjs"
 import DeviceDetailsDialog from "./DeviceDetailsDialog.mjs"
-import DeviceInstaller from "./DeviceInstaller.mjs"
 
 const majorGroups = WorkflowGroups
 
@@ -385,7 +384,6 @@ export default {
         WorkflowReactions,
         UploadWorkflowForm,
         CompatibleDeviceLabel,
-        DeviceInstaller,
         FullDeviceInfo,
         DeviceManagerDialog,
         DeviceDetailsDialog,
@@ -393,7 +391,6 @@ export default {
     template: `
     <!-- Workflow selection area with transition -->
     <div v-show="show" class="p-4 w-full overflow-hidden">
-
         <div class="flex justify-between mb-4">
           <div class="flex">
             <div class="mr-4">
@@ -405,8 +402,8 @@ export default {
                       class="px-2 py-0.5 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap"
                       @click="runOn = ''"
               >
-                Device Pool
-                <span class="text-xs text-gray-500 dark:text-gray-400">({{ store.poolDevices.length }})</span>
+                <span>Device Pool</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400"> ({{ store.poolDevices.length }})</span>
               </button>
             </div>
             
@@ -415,15 +412,19 @@ export default {
                 <span class="text-xs text-gray-500 dark:text-gray-400">my devices</span>
               </div>
               <div class="flex items-center gap-x-1 text-gray-500 dark:text-gray-400">
-                <button type="button" v-for="device in store.myDevices"
-                        :title="'Run on ' + device.shortId + ' ' + (device.gpus?.[0]?.name || '') + (device.lastIp ? (' @ ' + device.lastIp) : '')"
-                        :class="runOn === device.id ? colors.active : colors.default"
-                        class="px-2 py-0.5 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap"
-                        @click="runOn = device.id"
-                        @contextmenu.prevent.stop="deviceInfo=deviceInfo===device ? null : device"
-                >
-                  {{ device.shortId }}
-                </button>
+                <div v-for="device in store.myDevices" class="flex items-center gap-x-1">
+                  <button type="button"
+                          :title="'Run on ' + device.shortId + ' ' + (device.gpus?.[0]?.name || '') + (device.lastIp ? (' @ ' + device.lastIp) : '')"
+                          :class="runOn === device.id ? colors.active : colors.default"
+                          class="px-2 py-0.5 flex items-center space-x-1 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap"
+                          @click="runOn = device.id">
+                    <span @click.prevent.stop="selectDevice(device)" title="View Device Info" class="cursor-help focus:outline-none">
+                      <svg class="size-4 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2m1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
+                    </span>
+                    <span>{{ device.shortId }}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -472,7 +473,6 @@ export default {
                 </div>
             </div>
         </div>
-
         <!-- Workflow Grid -->
         <div class="mt-6">
             <div v-if="filteredWorkflows.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -516,7 +516,7 @@ export default {
                         <div class="px-2 pt-2">
 
                             <!-- Tags -->
-                            <div v-if="workflow.tags && workflow.tags.length > 0" class="flex flex-wrap gap-1 mb-3">
+                            <div v-if="workflow.tags?.length" class="flex flex-wrap gap-1 mb-3">
                                 <span v-for="tag in workflow.tags.slice(0, 3)"
                                       :key="tag"
                                       class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
@@ -529,7 +529,8 @@ export default {
                             </div>
     
                             <!-- Footer Info -->
-                            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400"
+                                 :class="workflow.tags?.length ? '' : 'mt-4'">
                                 <!-- Node Count -->
                                 <div class="flex items-center" 
                                     :title="workflow.version.nodes?.length ? workflow.version.nodes?.join('\\n') : 'requires no custom_nodes'">
@@ -566,8 +567,9 @@ export default {
             @uploaded="onWorkflowUploaded"
         />
 
-        <DeviceDetailsDialog v-if="deviceInfo" :device="deviceInfo" @done="deviceInfo = null" />
-        <DeviceInstaller v-else-if="deviceInstaller" :device="runOnDevices[0]" :version="deviceInstaller.version" @done="deviceInstaller = null" />
+        <DeviceManagerDialog v-if="selectedDevice && store.canManageDevice(selectedDevice)" :device="selectedDevice" @done="selectDevice(null)"/>
+        <DeviceDetailsDialog v-else-if="selectedDevice" :device="selectedDevice" @done="selectDevice(null)"/>
+      
     </div>
     `,
     emits:['select'],
@@ -578,9 +580,8 @@ export default {
         const store = inject('store')
         
         const runOn = ref('')
-        const deviceInfo = ref()
-        const deviceInstaller = ref()
         
+        const router = useRouter()
         const route = useRoute()
         const showUploadForm = ref(false)
         
@@ -599,9 +600,23 @@ export default {
             return categoryWorkflows.value.filter(x => x.tags?.includes(tag))
         })
         
+        // All Pooled Devices and User Devices combined
         const runOnDevices = computed(() => !runOn.value 
             ? store.poolDevices 
             : store.myDevices.filter(x => x.id === Number(runOn.value)))
+        
+        const runOnMyDevice = computed(() =>
+            runOn.value && store.myDevices.find(x => x.id === Number(runOn.value)))
+
+        const selectedDevice = computed(() => 
+            store.myDevices.find(x => x.id === Number(route.query.device)))
+        function selectDevice(device, args) {
+            if (device && Number(route.query.device) !== device.id) {
+                router.push({ query: { ...route.query, device: device.id, ...Object.assign({ show:'info' }, args) } })
+            } else {
+                router.push({ query: omit(route.query, ['device','show','versionId']) })
+            }
+        }
 
         function workflowTitle(workflow) {
             const sb = []
@@ -637,10 +652,13 @@ export default {
             const compatibleDevices = store.compatibleDevices(workflow.version, runOnDevices.value)
             if (compatibleDevices.length) {
                 emit('select', workflow)
-            } else if (runOn.value && runOnDevices.value.length) {
-                deviceInstaller.value = workflow
             } else {
-                alert('No compatible devices found')
+                const device = runOn.value && runOnDevices.value.find(x => x.id === Number(runOn.value))
+                if (device) {
+                    selectDevice(device, { show: 'workflows', versionId: workflow.version.id })
+                } else {
+                    alert('No compatible devices found')
+                }
             }
         }
         
@@ -663,6 +681,7 @@ export default {
         return {
             store,
             runOn,
+            runOnMyDevice,
             runOnDevices,
             colors,
             filteredWorkflows,
@@ -673,8 +692,8 @@ export default {
             pluralize,
             selectWorkflow,
             showUpload,
-            deviceInfo,
-            deviceInstaller,
+            selectDevice,
+            selectedDevice,
         }
     }
 }

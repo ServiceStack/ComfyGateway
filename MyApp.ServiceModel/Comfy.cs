@@ -3,6 +3,7 @@ using ServiceStack;
 
 namespace MyApp.ServiceModel;
 
+[JsonDerivedType(typeof(OwnerAgentInfo))]
 public class AgentInfo
 {
     public int Id { get; set; }
@@ -36,6 +37,7 @@ public class OwnerAgentInfo : AgentInfo
     public string? UserName { get; set; }
     public string? LastIp { get; set; }
     public string? Status { get; set; }
+    public ComfyAgentSettings Settings { get; set; } = new();
 }
 
 public class ComfyTask
@@ -44,8 +46,23 @@ public class ComfyTask
     public string Name { get; set; }
 }
 
+[ValidateIsAuthenticated]
 [Tag(Tags.Comfy)]
+public class UpdateComfyAgentSettings : IPatch, IReturn<UpdateComfyAgentSettingsResponse>
+{
+    [ValidateNotEmpty, ValidateExactLength(32)]
+    public string DeviceId { get; set; }
+    public bool? InDevicePool { get; set; }
+    public bool? PreserveOutputs { get; set; }
+    public int? MaxBatchSize { get; set; }
+}
+public class UpdateComfyAgentSettingsResponse
+{
+    public OwnerAgentInfo Result { get; set; }
+    public ResponseStatus? ResponseStatus { get; set; }
+}
 
+[Tag(Tags.Comfy)]
 [AutoApply(Behavior.AuditQuery)]
 public class QueryWorkflows : QueryDb<Workflow>
 {
@@ -125,6 +142,7 @@ public class QueueWorkflow : IPost, IReturn<QueueWorkflowResponse>
     public int? VersionId { get; set; }
     public int? ThreadId { get; set; }
     public string? Description { get; set; }
+    public string? DeviceId { get; set; }
     public Dictionary<string, object?>? Args { get; set; }
 }
 public class QueueWorkflowResponse

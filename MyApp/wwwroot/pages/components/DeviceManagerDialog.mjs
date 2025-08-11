@@ -1,26 +1,185 @@
 import { ref, computed, inject, onMounted, onUnmounted, provide } from "vue"
-import { CloseButton, PrimaryButton, useClient } from "@servicestack/vue"
+import { CloseButton, PrimaryButton, TextInput, useClient, css, useConfig } from "@servicestack/vue"
+import { useRoute } from "vue-router"
+import { pluralize } from "../lib/utils.mjs"
+import { useDeviceInstaller } from "../lib/installer.mjs"
+
 import { SystemInfo, GpusInfo, DeviceStats } from "./DeviceSystemInfo.mjs"
 import DeviceModels from "./DeviceModels.mjs"
 import DeviceCustomNodes from "./DeviceCustomNodes.mjs"
 import DevicePipPackages from "./DevicePipPackages.mjs"
-import { pluralize } from "../lib/utils.mjs"
-import { useDeviceInstaller } from "../lib/installer.mjs"
+import DeviceWorkflows from "./DeviceWorkflows.mjs"
+import { UpdateComfyAgentSettings } from "../../mjs/dtos.mjs"
+
+const DeviceSettings = {
+    template:`
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Device Settings</h3>
+        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+          <form @submit.prevent="saveSettings" class="space-y-6">
+            <ErrorSummary />
+            
+            <!-- In Device Pool Toggle -->
+            <div class="flex items-center justify-between">
+              <div class="flex flex-col">
+                <label class="text-sm font-medium text-gray-900 dark:text-white">
+                  In Device Pool
+                </label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  Earn credits by including your device in the public device pool
+                </p>
+              </div>
+              <button
+                type="button"
+                @click="toggleInDevicePool"
+                :class="[
+                  'relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:ring-offset-gray-700',
+                  request.inDevicePool
+                    ? 'bg-green-600'
+                    : 'bg-gray-200 dark:bg-gray-600'
+                ]"
+                role="switch"
+                :aria-checked="request.inDevicePool"
+              >
+                <span
+                  :class="[
+                    'pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200',
+                    request.inDevicePool ? 'translate-x-5' : 'translate-x-0'
+                  ]"
+                >
+                </span>
+              </button>
+            </div>
+
+            <!-- Preserve Outputs Toggle -->
+            <div class="flex items-center justify-between">
+              <div class="flex flex-col">
+                <label class="text-sm font-medium text-gray-900 dark:text-white">
+                  Preserve Outputs
+                </label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  Don't delete generated outputs from device after processing
+                </p>
+              </div>
+              <button
+                type="button"
+                @click="togglePreserveOutputs"
+                :class="[
+                  'relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:ring-offset-gray-700',
+                  request.preserveOutputs
+                    ? 'bg-green-600'
+                    : 'bg-gray-200 dark:bg-gray-600'
+                ]"
+                role="switch"
+                :aria-checked="request.preserveOutputs"
+              >
+                <span
+                  :class="[
+                    'pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200',
+                    request.preserveOutputs ? 'translate-x-5' : 'translate-x-0'
+                  ]"
+                >
+                </span>
+              </button>
+            </div>
+
+            <!-- Max Batch Size Input -->
+            <div>
+              <TextInput
+                id="maxBatchSize"
+                v-model="request.maxBatchSize"
+                type="number"
+                label="Max Batch Size"
+                help="Maximum number of items to process in a single batch"
+                :min="1"
+                :max="8"
+                placeholder="Enter max batch size"
+              />
+            </div>
+
+            <!-- Save Button -->
+            <div class="flex justify-end pt-4">
+              <PrimaryButton
+                type="submit"
+                :disabled="saving"
+                class="px-4 py-2"
+              >
+                {{ saving ? 'Saving...' : 'Save Settings' }}
+              </PrimaryButton>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+    `,
+    props: {
+        device: Object,
+    },
+    setup(props) {
+        const store = inject('store')
+        const installer = inject('installer')
+        const client = useClient()
+        const saving = ref(false)
+
+        // Initialize request with device settings, ensuring we have the deviceId
+        const request = ref(new UpdateComfyAgentSettings({
+            deviceId: props.device.deviceId,
+            inDevicePool: props.device.settings?.inDevicePool ?? false,
+            preserveOutputs: props.device.settings?.preserveOutputs ?? false,
+            maxBatchSize: props.device.settings?.maxBatchSize ?? 1
+        }))
+
+        function toggleInDevicePool() {
+            request.value.inDevicePool = !request.value.inDevicePool
+        }
+
+        function togglePreserveOutputs() {
+            request.value.preserveOutputs = !request.value.preserveOutputs
+        }
+        
+        async function saveSettings() {
+            saving.value = true
+            const api = await client.api(request.value)
+            if (api.succeeded) {
+                const updatedDevice = api.response.result
+                Object.assign(props.device, updatedDevice)
+                const oldStatus = installer.status
+                installer.setStatus('Settings saved successfully!')
+                setTimeout(() => installer.setStatus(oldStatus), 2000)
+            } else {
+                console.error('Failed to save settings:', api.error)
+            }
+            saving.value = false
+        }
+
+        return {
+            store,
+            request,
+            saving,
+            toggleInDevicePool,
+            togglePreserveOutputs,
+            saveSettings,
+        }
+    }
+}
 
 const DeviceInfo = {
     components: {
         SystemInfo, 
         GpusInfo, 
         DeviceStats,
+        DeviceSettings,
     },
     template:`
       <div class="p-6 space-x-6 space-y-6">
         <div class="flex gap-x-6">
-          <div class="w-1/2 flex flex-col gap-y-6">
+          <div class="w-1/2 space-y-6">
             <SystemInfo :device="installer.device" />
             <GpusInfo :device="installer.device" />
+            <DeviceSettings :device="installer.device" />
           </div>
-          <div class="w-1/2">
+          <div class="w-1/2 space-y-6">
             <DeviceStats :device="installer.device" />
           </div>
         </div>
@@ -59,6 +218,7 @@ export default {
         CloseButton,
         PrimaryButton,
         DeviceInfo,
+        DeviceWorkflows,
         DeviceModels,
         DeviceCustomNodes,
         DevicePipPackages,
@@ -121,8 +281,9 @@ export default {
             
             <div class="overflow-y-auto">
               <DeviceModels v-if="$route.query.show === 'models'" />
+              <DeviceWorkflows v-else-if="$route.query.show === 'workflows'" @done="$emit('done')" />
               <DeviceCustomNodes v-else-if="$route.query.show === 'nodes'" />
-              <DevicePipPackages v-else-if="$route.query.show === 'packages'" :device="device" />
+              <DevicePipPackages v-else-if="$route.query.show === 'packages'" />
               <DeviceInfo v-else />
             </div>
 
@@ -132,7 +293,7 @@ export default {
                 <div class="pr-2 cursor-pointer select-none" @click="showActions=!showActions" popovertarget="desktop-menu-solutions">
                   <svg class="w-5 h-5 hover:text-gray-700 dark:hover:text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 16a2 2 0 0 1 2 2a2 2 0 0 1-2 2a2 2 0 0 1-2-2a2 2 0 0 1 2-2m0-6a2 2 0 0 1 2 2a2 2 0 0 1-2 2a2 2 0 0 1-2-2a2 2 0 0 1 2-2m0-6a2 2 0 0 1 2 2a2 2 0 0 1-2 2a2 2 0 0 1-2-2a2 2 0 0 1 2-2"></path></svg>
                 </div>
-                <div :title="'Status: ' + status" class="flex-grow">{{installer.status}}</div>
+                <div :title="'Status: ' + installer.status" class="flex-grow">{{installer.status}}</div>
               </div>
               <div :class="['pr-2', !installer.showDownloads 
                 ? 'text-gray-400 dark:text-gray-500 hover:text-indigo-700 dark:hover:text-indigo-300'
@@ -166,6 +327,7 @@ export default {
                   <svg v-if="installer.hasInstalled(download)" class="mr-2 size-4 text-green-400 dark:text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m-1.177-7.86l-2.765-2.767L7 12.431l3.119 3.121a1 1 0 0 0 1.414 0l5.952-5.95l-1.062-1.062z"></path></svg>
                   <svg v-else-if="download.type === 'Node'" class="mr-2 size-4 text-gray-700 dark:text-gray-200" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M17.5 3a3.5 3.5 0 0 0-3.456 4.06L8.143 9.704a3.5 3.5 0 1 0-.01 4.6l5.91 2.65a3.5 3.5 0 1 0 .863-1.805l-5.94-2.662a3.5 3.5 0 0 0 .002-.961l5.948-2.667A3.5 3.5 0 1 0 17.5 3"/></svg>
                   <svg v-else-if="download.type === 'Package'" class="mr-2 size-4 text-gray-700 dark:text-gray-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" d="m8.878.392l5.25 3.045c.54.314.872.89.872 1.514v6.098a1.75 1.75 0 0 1-.872 1.514l-5.25 3.045a1.75 1.75 0 0 1-1.756 0l-5.25-3.045A1.75 1.75 0 0 1 1 11.049V4.951c0-.624.332-1.201.872-1.514L7.122.392a1.75 1.75 0 0 1 1.756 0M7.875 1.69l-4.63 2.685L8 7.133l4.755-2.758l-4.63-2.685a.25.25 0 0 0-.25 0M2.5 5.677v5.372c0 .09.047.171.125.216l4.625 2.683V8.432Zm6.25 8.271l4.625-2.683a.25.25 0 0 0 .125-.216V5.677L8.75 8.432Z"/></svg>
+                  <svg v-else-if="download.type === 'Model'" class="mr-2 size-4 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                   <svg v-else class="mr-2 size-4 text-gray-700 dark:text-gray-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zm1-2h12l-3.75-5l-3 4L9 13zm-1 2V5z"/></svg>
                   <span :title="download.url" class="text-sm text-gray-700 dark:text-gray-200 w-48 overflow-hidden overflow-ellipsis whitespace-nowrap">
                     {{ download.fileName }}
@@ -185,45 +347,43 @@ export default {
     props: {
         device: Object,
     },
-    setup(props, {emit}) {
+    setup(props, { emit }) {
         const store = inject('store')
-        const events = inject('events')
-        const client = useClient()
-        const installer = useDeviceInstaller(store, store._client, props.device)
+        const route = useRoute()
+        const installer = useDeviceInstaller(store, store._client, props.device, route)
         provide('installer', installer)
-        const status = ref('')
         const error = ref()
         const showActions = ref(false)
-        const showDownloads = ref(false)
         const tabs = [
-            { id: 'info',     name: 'System Info' },
-            { id: 'models',   name: 'Models' },
-            { id: 'nodes',    name: 'Custom Nodes' },
-            { id: 'packages', name: 'Packages' },
+            { id: 'info',      name: 'System Info' },
+            { id: 'workflows', name: 'Workflows' },
+            { id: 'models',    name: 'Models' },
+            { id: 'nodes',     name: 'Custom Nodes' },
+            { id: 'packages',  name: 'Packages' },
         ]
 
+        
         // Handle Esc key to close dialog
         function handleKeydown(event) {
             if (event.key === 'Escape') {
-                if (showDownloads.value) {
-                    showDownloads.value = false
-                } else {
-                    emit('done')
-                }
+                installer.handleClose()
             }
         }
 
-        let subs = []
         onMounted(() => {
-            subs.push(events.subscribe('status', msg => status.value = msg))
-            subs.push(events.subscribe('error', status => error.value = status))
             document.addEventListener('keydown', handleKeydown)
+            installer.registerCloseHandler('info', () => {
+                if (installer.showDownloads) {
+                    installer.toggleShowDownloads(false)
+                } else {
+                    emit('done')
+                }
+            })
             installer.startMonitor()
         })
 
         onUnmounted(() => {
             console.log('onUnmounted')
-            subs.forEach(sub => sub.unsubscribe())
             document.removeEventListener('keydown', handleKeydown)
             installer.stopMonitor()
         })
@@ -260,10 +420,8 @@ export default {
             store,
             installer,
             tabs,
-            status,
             error,
             showActions,
-            showDownloads,
             menuCommand,
             getDeviceStatus,
             getStatusBadgeClass,

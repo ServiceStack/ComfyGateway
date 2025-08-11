@@ -2,11 +2,9 @@ import { ref, computed } from "vue"
 import { formatName } from "./WorkflowsViewer.mjs"
 import { WorkflowGroups, toJsonObject, toJsonArray, acceptedImages, acceptedVideos, acceptedAudios } from "../lib/utils.mjs"
 import FileUpload from "./FileUpload.mjs"
-import {CloseButton} from "@servicestack/vue";
 
 export default {
     components: {
-        CloseButton,
         FileUpload,
     },
     template:`

@@ -1225,47 +1225,6 @@ let o = {
         return isViewable
     },
     
-    combineAssets(device) {
-        const assets = new Set()
-        for (const asset of device.checkpoints ?? []) {
-            assets.add(`checkpoints/${asset}`)
-        }
-        for (const asset of device.clip ?? []) {
-            assets.add(`clip/${asset}`)
-        }
-        for (const asset of device.clipVision ?? []) {
-            assets.add(`clip_vision/${asset}`)
-        }
-        for (const asset of device.controlnet ?? []) {
-            assets.add(`controlnet/${asset}`)
-        }
-        for (const asset of device.diffusionModels ?? []) {
-            assets.add(`diffusion_models/${asset}`)
-        }
-        for (const asset of device.embeddings ?? []) {
-            assets.add(`embeddings/${asset}`)
-        }
-        for (const asset of device.gligen ?? []) {
-            assets.add(`gligen/${asset}`)
-        }
-        for (const asset of device.loras ?? []) {
-            assets.add(`loras/${asset}`)
-        }
-        for (const asset of device.photomaker ?? []) {
-            assets.add(`photomaker/${asset}`)
-        }
-        for (const asset of device.styleModels ?? []) {
-            assets.add(`style_models/${asset}`)
-        }
-        for (const asset of device.upscaleModels ?? []) {
-            assets.add(`upscale_models/${asset}`)
-        }
-        for (const asset of device.vae ?? []) {
-            assets.add(`vae/${asset}`)
-        }
-        return Array.from(assets).sort()
-    },
-
     urlToName(url) {
         name = lastRightPart(url, '/')
         if (name.endsWith('.git')) {
@@ -1279,7 +1238,7 @@ let o = {
         const allDevices = [...this.myDevices]
         allDevices.push(...this.poolDevices.filter(x => !this.myDevices.find(y => y.id === x.id)))
         allDevices.forEach(device => this.populateDevice(device))
-        this.allDevices = allDevices.map(device => reactive(device))
+        //this.allDevices = allDevices.map(device => device)
     },
     
     populateDevice(device) {
@@ -1326,12 +1285,14 @@ let o = {
             }
         }
         
-        // Verify device has all required assets
-        if (!device.assets) {
-            device.assets = this.combineAssets(device)
-        }
+        const modelsSet = device.modelsSet ?? (device.modelsSet = this.getDeviceModelsSet(device)) 
+        const assets = device.assets ?? (device.assets = Array.from(modelsSet ?? []).sort())
+        
+        // console.log('device', device.modelsSet)
+        // console.log(device.models)
+        
         for (const asset of workflowVersion.assets) {
-            if (!device.assets.includes(asset)) {
+            if (!assets.includes(asset)) {
                 missingAssets.push(asset)
             }
         }
@@ -1350,13 +1311,13 @@ let o = {
     },
     
     variantWorkflowsForArtifact(artifact) {
-        return artifact && !getHDClass(artifact.width, artifact.height) 
+        return artifact && artifact.type === 'Image' && !getHDClass(artifact.width, artifact.height) 
             ? this.workflowVersions.filter(x => x.info?.type === 'ImageToImage')
             : []
     },
     
     canManageDevice(device) {
-        return store.isAdmin || device.userId === store.userId
+        return device?.userId && (store.isAdmin || device.userId === store.userId)
     },
 
     getDeviceModelsSet(device) {

@@ -13,6 +13,8 @@ public class ComfyFileRef
 
 public enum BaseModel
 {
+    AuraFlow,
+
     SDXL,
     [EnumMember(Value = "SD 1.x")]
     SD1,
@@ -28,32 +30,34 @@ public enum BaseModel
     SD35Large,
     [EnumMember(Value = "SD 3.5 Large Turbo")]
     SD35LargeTurbo,
-    Pony,
-    [EnumMember(Value = "FLUX.1 schnell")]
+    [EnumMember(Value = "SDXL Lightning")]
+    SDXLLightning,
+    StableAudio,
+    [EnumMember(Value = "Stable Video Diffusion")]
+    SVD,
+    [EnumMember(Value = "FLUX.1 Schnell")]
     Flux1S,
-    [EnumMember(Value = "Flux.1 dev")]
+    [EnumMember(Value = "Flux.1 Dev")]
     Flux1D,
     [EnumMember(Value = "Flux.1 Kontext")]
     Flux1Kontext,
     HiDream,
-    AuraFlow,
-    [EnumMember(Value = "SDXL Lightning")]
-    SDXLLightning,
-    SVD,
+    QwenImage,
+    Hunyuan1,
+    HunyuanVideo,
+    Lumina,
+    Pony,
+    NoobAI,
+    Illustrious,
     [EnumMember(Value = "PixArt-α")]
     PixArtA,
     [EnumMember(Value = "PixArt-Σ")]
     PixArtE,
     [EnumMember(Value = "Hunyuan 1.x")]
-    Hunyuan1,
-    HunyuanVideo,
-    Lumina,
     Kolors,
-    Illustrious,
     Mochi,
     LTXV,
     CogVideoX,
-    NoobAI,
     [EnumMember(Value = "WanVideo 1.3B")]
     WanVideo13B,
     [EnumMember(Value = "WanVideo 14B")]
@@ -74,6 +78,7 @@ public enum ComfyWorkflowType
     TextToVideo,
     TextTo3D,
     AudioToText,
+    AudioToAudio,
     VideoToText,
     ImageToVideo,
 }
@@ -220,6 +225,7 @@ public class ParsedWorkflow
     public List<string> RequiresPipPackages { get; set; }
     public WorkflowInfo Info { get; set; }
     public Dictionary<string,object?> Workflow { get; set; }
+    public Dictionary<string, ApiNode>? ApiPrompt { get; set; }
 }
 
 public class WorkflowInfo
@@ -417,6 +423,8 @@ public class Artifact : AuditBase
     public string? Color { get; set; }
     public string? Caption { get; set; }
     public string? Description { get; set; }
+    
+    public AudioInfo? Audio { get; set; }
     public string? PublishedBy { get; set; }
     [Index]
     public DateTime? PublishedDate { get; set; }
@@ -463,6 +471,23 @@ public class ComfyAssetOutput : IAssetMetadata
     public List<ObjectDetection>? Objects { get; set; }
     public string? Phash { get; set; }
     public string? Color { get; set; }
+    
+    // Audio
+    public string? Codec { get; set; }
+    public double? Duration { get; set; }
+    public int? Bitrate { get; set; }
+    public int? Streams { get; set; }
+    public int? Programs { get; set; }
+}
+
+public class AudioInfo
+{
+    public string? Codec { get; set; }
+    public double? Duration { get; set; }
+    public int? Length { get; set; }
+    public int? Bitrate { get; set; }
+    public int? Streams { get; set; }
+    public int? Programs { get; set; }
 }
 
 public class ArtifactMetadata : IAssetMetadata

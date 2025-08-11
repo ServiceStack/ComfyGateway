@@ -1,13 +1,54 @@
 import { ref, computed, watch, inject, onMounted, onUnmounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import {useAuth, useUtils} from "@servicestack/vue"
+import { useAuth, useUtils } from "@servicestack/vue"
+import { lastRightPart } from "@servicestack/client";
 import { ArtifactGallery, ArtifactDownloads } from "./Artifacts.mjs"
 import { AllRatings, toArtifacts, formatDuration, formatRating, sortByCreatedDesc, sortByCreatedAsc, sortByModifiedDesc, sortByModifiedAsc } from "../lib/utils.mjs"
+
+import AudioPlayer from "./AudioPlayer.mjs"
+import ListenButton from "./ListenButton.mjs"
+
+const PlayButton = {
+    template:`
+      <button data-slug="@episode.Slug" data-title="@episode.Title" data-url="@episode.Url"
+              type="button" aria-label="Play episode @episode.Title"
+              onclick="togglePlayButton(this)"
+              class="group relative flex h-18 w-18 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 dark:bg-slate-200 hover:bg-slate-900 dark:hover:bg-slate-50 focus:outline-none focus:ring focus:ring-slate-700 dark:focus:ring-slate-200 focus:ring-offset-4 dark:ring-offset-black">
+        <div class="paused flex items-center gap-x-1">
+          <svg viewBox="0 0 36 36" aria-hidden="true" class="h-9 w-9 fill-white dark:fill-black group-active:fill-white/80 dark:group-active:fill-black/80">
+            <path d="M33.75 16.701C34.75 17.2783 34.75 18.7217 33.75 19.299L11.25 32.2894C10.25 32.8668 9 32.1451 9 30.9904L9 5.00962C9 3.85491 10.25 3.13323 11.25 3.71058L33.75 16.701Z" />
+          </svg>
+        </div>
+        <div class="hidden playing flex items-center gap-x-1">
+          <svg viewBox="0 0 36 36" aria-hidden="true" class="h-9 w-9 fill-white dark:fill-black group-active:fill-white/80 dark:group-active:fill-black/80">
+            <path d="M8.5 4C7.67157 4 7 4.67157 7 5.5V30.5C7 31.3284 7.67157 32 8.5 32H11.5C12.3284 32 13 31.3284 13 30.5V5.5C13 4.67157 12.3284 4 11.5 4H8.5ZM24.5 4C23.6716 4 23 4.67157 23 5.5V30.5C23 31.3284 23.6716 32 24.5 32H27.5C28.3284 32 29 31.3284 29 30.5V5.5C29 4.67157 28.3284 4 27.5 4H24.5Z" />
+          </svg>
+        </div>
+      </button>
+    `,
+    setup(props) {
+        function togglePlayButton(button) {
+            const { slug, title, url } = button.dataset
+            if (globalThis.player?.isPlaying) {
+                globalThis.player.toggle()
+            } else {
+                globalThis.player = new AudioPlayer(url, title)
+                globalThis.player.play()
+            }
+        }
+        return {
+            togglePlayButton,
+        }
+    }
+}
 
 export default {
     components: {
         ArtifactGallery,
         ArtifactDownloads,
+        AudioPlayer,
+        ListenButton,
+        PlayButton,
     },
     template:`
     <ErrorSummary :status="error" />
@@ -80,7 +121,7 @@ export default {
         </div>
     </div>
     <div v-if="generations.length" class="mb-16" :key="renderKey">
-        <div v-for="gen in pagedGenerations">
+        <div v-for="gen in pagedGenerations" :data-id="gen.id">
             <div>
                 <div class="flex items-center justify-between">
                     <span @click="selectGeneration(gen,$event)" class="cursor-pointer mt-4 flex justify-center items-center text-xl hover:underline underline-offset-4" :title="gen.description ?? ''">
@@ -94,7 +135,7 @@ export default {
 
                 <div v-if="workflowName(gen.workflowId)" class="flex justify-between">
                     <div class="text-sm flex items-center gap-x-2">
-                        <template v-if="gen.result?.assets.length">
+                        <template v-if="gen.result?.assets?.length">
                             <div v-if="gen.publishedDate" class="flex items-center hover:text-sky-500 dark:hover:text-sky-400">
                                 <svg class="size-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6v2H5v12h12v-6zM13 3v2h4.586l-7.793 7.793l1.414 1.414L19 6.414V11h2V3z"/></svg>
                                 <RouterLink :to="{ path: '/generations/' + gen.id }" class="text-sm">
@@ -130,7 +171,33 @@ export default {
                     </div>
                 </div>
                 <div v-if="gen.result?.assets?.length" class="w-full">
-                    <ArtifactGallery ref="refGallery" :results="store.toArtifacts(gen.result.assets, gen)"
+                    <div v-if="gen.output === 'Audio'">
+                      <div v-for="output in gen.result.assets" class="flex items-center p-4">
+                        <div class="flex flex-col justify-center items-center space-y-4">
+                          <button type="button" :aria-label="'Play ' + gen.description"
+                                  @click="togglePlayButton(output.url, gen.description)"
+                                  class="group relative flex h-18 w-18 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 dark:bg-slate-200 hover:bg-slate-900 dark:hover:bg-slate-50 focus:outline-none focus:ring focus:ring-slate-700 dark:focus:ring-slate-200 focus:ring-offset-4 dark:ring-offset-black">
+                            <div v-if="!refAudio?.player?.isPlaying || playAudio?.src !== output.url" class="paused flex items-center gap-x-1">
+                              <svg viewBox="0 0 36 36" aria-hidden="true" class="h-9 w-9 fill-white dark:fill-black group-active:fill-white/80 dark:group-active:fill-black/80">
+                                <path d="M33.75 16.701C34.75 17.2783 34.75 18.7217 33.75 19.299L11.25 32.2894C10.25 32.8668 9 32.1451 9 30.9904L9 5.00962C9 3.85491 10.25 3.13323 11.25 3.71058L33.75 16.701Z" />
+                              </svg>
+                            </div>
+                            <div v-else class="playing flex items-center gap-x-1">
+                              <svg viewBox="0 0 36 36" aria-hidden="true" class="h-9 w-9 fill-white dark:fill-black group-active:fill-white/80 dark:group-active:fill-black/80">
+                                <path d="M8.5 4C7.67157 4 7 4.67157 7 5.5V30.5C7 31.3284 7.67157 32 8.5 32H11.5C12.3284 32 13 31.3284 13 30.5V5.5C13 4.67157 12.3284 4 11.5 4H8.5ZM24.5 4C23.6716 4 23 4.67157 23 5.5V30.5C23 31.3284 23.6716 32 24.5 32H27.5C28.3284 32 29 31.3284 29 30.5V5.5C29 4.67157 28.3284 4 27.5 4H24.5Z" />
+                              </svg>
+                            </div>
+                          </button>
+                          <div>
+                            <a :href="output.url + '?download=1'" class="flex text-sm items-center text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">
+                              <svg class="w-5 h-5 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 20h12M12 4v12m0 0l3.5-3.5M12 16l-3.5-3.5"></path></svg>
+                              <div class="">{{output.fileName.length < output.fileName ? 60 : 'download.' + lastRightPart(output.fileName,'.')}}</div>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <ArtifactGallery v-else :results="store.toArtifacts(gen.result.assets, gen)"
                         :generation="gen" @start-drag="handleDragStart">
                         <template #artifact-bottom="{ artifact, selected }">
                             <div class="mt-0.5 flex text-sm items-center justify-between">
@@ -177,6 +244,10 @@ export default {
                 </div>
             </div>
         </div>
+        <div class="fixed bottom-0 max-w-3xl rounded-tl-lg rounded-tr-lg overflow-hidden" style="min-width:600px;">
+            <AudioPlayer ref="refAudio" :bus="events" :src="playAudio?.src" :title="playAudio?.title" :autoPlay="true" :showClose="true"
+                         @playing="playingAudio=$event" @paused="playingAudio=null" @close="playAudio=null" />
+        </div>
         <div ref="refBottom"></div>
     </div>
     <div v-else class="flex flex-grow items-center justify-center min-h-[400px]">
@@ -197,17 +268,21 @@ export default {
     emits:['selectGeneration','retryGeneration'],
     setup(props, { emit }) {
         const store = inject('store')
+        const events = inject('events')
         const { isAdmin } = useAuth()
         const router = useRouter()
         const route = useRoute()
         const selectedThread = ref(null)
         const error = ref()
         const renderKey = ref(0)
-        const refGallery = ref()
         const pinningImage = ref('')
         const publishingGeneration = ref()
         const refBottom = ref()
         const regeneratingIdMap = ref({})
+        const refAudio = ref()
+        const playAudio = ref()
+        const playingAudio = ref()
+
         let intersectionObserver = null
         const { copyText } = useUtils()
 
@@ -286,6 +361,16 @@ export default {
                 params: route.params,
                 query: { ...route.query, sort }
             })
+        }
+        
+        function togglePlayButton(url, title) {
+            if (refAudio.value?.player) {
+                if (playAudio.value?.src === url) {
+                    refAudio.value.player.toggle()
+                    return
+                }
+            }
+            playAudio.value = { src: url, title }
         }
 
         function workflowName(workflowId) {
@@ -419,9 +504,9 @@ export default {
 
         return {
             renderKey,
-            refGallery,
             refBottom,
             store,
+            events,
             error,
             AllRatings,
             generations,
@@ -431,6 +516,9 @@ export default {
             currentFilter,
             filterCounts,
             sortBy,
+            refAudio,
+            playAudio,
+            playingAudio,
             workflowName,
             isAdmin,
             toArtifacts,
@@ -449,6 +537,7 @@ export default {
             publishingGeneration,
             handleDragStart,
             loadMoreGenerations,
+            togglePlayButton,
             copyText,
         }
     }

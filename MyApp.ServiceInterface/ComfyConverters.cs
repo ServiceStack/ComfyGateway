@@ -475,6 +475,125 @@ public static class ComfyConverters
         }
         return ret;
     }
+    
+    public class AudioCategory
+    {
+        public const string Music = "Music";
+        public const string Soundtrack = "Soundtrack";
+        public const string SoundEffect = "Sound effect";
+        public const string Speech = "Speech";
+        public const string Nature = "Nature";
+        
+        // Sub category
+        public const string Guitar = "Guitar";
+        public const string Piano = "Piano";
+        public const string Organ = "Organ";
+        public const string Electronica = "Electronica";
+        public const string Classical = "Classical";
+        public const string VideoGame = "Video game";
+    }
+
+    public static Dictionary<string, string> AudioMajorCategories { get; set; } = new()
+    {
+        // ["Music"] = "Music",
+        ["Keyboard (musical)"] = AudioCategory.Music,
+        ["Musical instrument"] = AudioCategory.Music,
+        ["Pop music"] = AudioCategory.Music,
+        ["House music"] = AudioCategory.Music,
+        ["Dance music"] = AudioCategory.Music,
+        ["Trance music"] = AudioCategory.Music,
+        ["Soul music"] = AudioCategory.Music,
+        ["Jingle, tinkle"] = AudioCategory.Music,
+        ["Jingle (music)"] = AudioCategory.Music,
+        ["Electronic music"] = AudioCategory.Music,
+        ["Christian music"] = AudioCategory.Music,
+        ["Christmas music"] = AudioCategory.Music,
+        ["Music for children"] = AudioCategory.Music,
+        ["Folk music"] = AudioCategory.Music,
+        ["Hip hop music"] = AudioCategory.Music,
+        ["Exciting music"] = AudioCategory.Music,
+        ["Electronic dance music"] = AudioCategory.Music,
+        ["Soundtrack music"] = AudioCategory.Soundtrack,
+        ["Ambient music"] = AudioCategory.Soundtrack,
+        ["Background music"] = AudioCategory.Soundtrack,
+        ["Theme music"] = AudioCategory.Soundtrack,
+        ["Sound effect"] = AudioCategory.SoundEffect,
+        ["Explosion"] = AudioCategory.SoundEffect,
+        ["Eruption"] = AudioCategory.SoundEffect,
+        ["Fire"] = AudioCategory.SoundEffect,
+        ["Rain"] = AudioCategory.SoundEffect,
+        ["Water"] = AudioCategory.SoundEffect,
+        ["Raindrop"] = AudioCategory.SoundEffect,
+        ["Rustling leaves"] = AudioCategory.SoundEffect,
+        ["Car"] = AudioCategory.SoundEffect,
+        ["Vehicle"] = AudioCategory.SoundEffect,
+        ["Narration, monologue"] = AudioCategory.Speech,
+        ["Speech"] = AudioCategory.Speech,
+        ["Child speech, kid speaking"] = AudioCategory.Speech,
+        ["Environmental noise"] = AudioCategory.Nature,
+        ["Outside, rural or natural"] = AudioCategory.Nature,
+        ["Bird"] = AudioCategory.Nature,
+        ["Animal"] = AudioCategory.Nature,
+        ["Insect"] = AudioCategory.Nature,
+        ["Cricket"] = AudioCategory.Nature,
+        ["Wild animals"] = AudioCategory.Nature,
+        ["Bird vocalization, bird call, bird song"] = AudioCategory.Nature,
+        ["Chirp, tweet"] = AudioCategory.Nature,
+        ["Snake"] = AudioCategory.Nature,
+        ["Frog"] = AudioCategory.Nature,
+        ["Livestock, farm animals, working animals"] = AudioCategory.Nature,
+    };
+
+    public static Dictionary<string, string> AudioSubCategories { get; set; } = new()
+    {
+        ["Guitar"] = AudioCategory.Guitar,
+        ["Acoustic guitar"] = AudioCategory.Guitar,
+        ["Steel guitar, slide guitar"] = AudioCategory.Guitar,
+        ["Bass guitar"] = AudioCategory.Guitar,
+        ["Ukulele"] = AudioCategory.Guitar,
+        ["Plucked string instrument"] = AudioCategory.Guitar,
+        ["Mandolin"] = AudioCategory.Guitar,
+        ["Piano"] = AudioCategory.Piano,
+        ["Electric piano"] = AudioCategory.Piano,
+        ["Organ"] = AudioCategory.Organ,
+        ["Electronic organ"] = AudioCategory.Organ,
+        ["Hammond organ"] = AudioCategory.Organ,
+        ["Electronica"] = AudioCategory.Electronica,
+        ["Electronic music"] = AudioCategory.Electronica,
+        ["Trance music"] = AudioCategory.Electronica,
+        ["Electronic dance music"] = AudioCategory.Electronica,
+        ["Synthesizer"] = AudioCategory.Electronica,
+        ["Dubstep"] = AudioCategory.Electronica,
+        ["Sampler"] = AudioCategory.Electronica,
+        ["Techno"] = AudioCategory.Electronica,
+        ["Violin, fiddle"] = AudioCategory.Classical,
+        ["Wind instrument, woodwind instrument"] = AudioCategory.Classical,
+        ["Video game music"] = AudioCategory.VideoGame,
+    };
+
+    public static Dictionary<string, double>? GetAudioCategories(Dictionary<string, double> tags)
+    {
+        var categories = new Dictionary<string, double>();
+        foreach (var tag in tags)
+        {
+            if (AudioMajorCategories.TryGetValue(tag.Key, out var category))
+            {
+                categories[category] = tag.Value.ConvertTo<double>();
+                break;
+            }
+        }
+        foreach (var tag in tags)
+        {
+            if (AudioSubCategories.TryGetValue(tag.Key, out var category))
+            {
+                categories[category] = tag.Value.ConvertTo<double>();
+                break;
+            }
+        }
+        return categories.Count > 0 
+            ? categories 
+            : null;
+    }
 
     public static WorkflowResult GetOutputs(Dictionary<string, object?> outputs, Rating minRating)
     {
@@ -623,6 +742,91 @@ public static class ComfyConverters
                     }
                 }
 
+                if (nodeOutputs.TryGetValue("audio", out var oAudioArray) && oAudioArray is List<object> audioArray)
+                {
+                    ret.Assets ??= [];
+                    foreach (var audio in audioArray)
+                    {
+                        if (audio is Dictionary<string, object?> audioDict)
+                        {
+                            if (audioDict.TryGetValue("filename", out var oFilename) && oFilename is string filename &&
+                                audioDict.TryGetValue("type", out var oType))
+                            {
+                                if (string.IsNullOrEmpty(filename)) continue;
+
+                                audioDict.TryGetValue("subfolder", out var elSubFolder);
+
+                                var path = "/view"
+                                    .AddQueryParam("filename", filename)
+                                    .AddQueryParam("type", oType?.ToString() ?? "")
+                                    .AddQueryParam("subfolder", elSubFolder?.ToString() ?? "");
+
+                                var asset = new ComfyAssetOutput
+                                {
+                                    NodeId = nodeId,
+                                    Type = AssetType.Audio,
+                                    FileName = filename,
+                                    Url = path,
+                                };
+
+                                if (audioDict.TryGetValue("codec", out var oCodec))
+                                    asset.Codec = oCodec?.ToString();
+                                if (audioDict.TryGetValue("duration", out var oDuration))
+                                    asset.Duration = oDuration?.ConvertTo<double>();
+                                if (audioDict.TryGetValue("bitrate", out var oBitrate))
+                                    asset.Bitrate = oBitrate?.ConvertTo<int>();
+                                if (audioDict.TryGetValue("streams", out var oStreams))
+                                    asset.Streams = oStreams?.ConvertTo<int>();
+                                if (audioDict.TryGetValue("programs", out var oPrograms))
+                                    asset.Programs = oPrograms?.ConvertTo<int>();
+                                
+
+                                /* tags format: {
+                                    "tag1": 0.5,
+                                    "tag2": 0.3,
+                                    "tag3": 0.2
+                                   }
+                                 */
+                                Dictionary<string,double>? tags = null;
+                                if (audioDict.TryGetValue("tags", out var oTags) &&
+                                    oTags is Dictionary<string, object?> tagsDict)
+                                {
+                                    tags = new();
+                                    foreach (var tag in tagsDict)
+                                    {
+                                        tags[tag.Key] = tag.Value.ConvertTo<double>();
+                                    }
+                                    asset.Tags = tags;
+                                }
+
+                                /* categories format: {
+                                    "cat1": 0.5,
+                                    "cat2": 0.3,
+                                    "cat3": 0.2
+                                   }
+                                 */
+                                Dictionary<string,double>? categories = null;
+                                if (audioDict.TryGetValue("categories", out var oCategories) &&
+                                    oCategories is Dictionary<string, object?> categoriesDict)
+                                {
+                                    categories = new();
+                                    foreach (var tag in categoriesDict)
+                                    {
+                                        categories[tag.Key] = tag.Value.ConvertTo<double>();
+                                    }
+                                    asset.Categories = categories;
+                                }
+                                else if (asset.Tags != null)
+                                {
+                                    asset.Categories = GetAudioCategories(asset.Tags);
+                                }
+                                
+                                ret.Assets.Add(asset);
+                            }
+                        }
+                    }
+                }
+
                 if (nodeOutputs.TryGetValue("text", out var oTextArray) && oTextArray is List<object> textArray)
                 {
                     ret.Texts ??= [];
@@ -635,6 +839,7 @@ public static class ComfyConverters
                         });
                     }
                 }
+                
             }
         }
 

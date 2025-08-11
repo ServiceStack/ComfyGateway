@@ -321,10 +321,8 @@ public class AgentServices(ILogger<AgentServices> log,
                 RequirePip = appData.RequirePip,
                 RequireNodes = appData.RequireNodes,
                 RequireModels = appData.RequireModels,
-                DevicePool = DateTime.UtcNow,
-                Settings = new ComfyAgentSettings {
-                    PreserveOutputs = false,
-                },
+                DevicePool = null,
+                Settings = ComfyAgentSettings.CreateDefault(),
             };
         }
         
@@ -493,7 +491,10 @@ public class AgentServices(ILogger<AgentServices> log,
                         if (asset.FileName == file.FileName)
                         {
                             asset.Url = relativePath;
-                            posterImage ??= asset.Url;
+                            if (outputType == AssetType.Image)
+                            {
+                                posterImage ??= asset.Url;
+                            }
                         }
                         else
                         {
@@ -531,6 +532,22 @@ public class AgentServices(ILogger<AgentServices> log,
                                 variantName = versionName;
                             }
                         }
+                        
+                        AudioInfo? audio = null;
+                        string? description = null;
+                        if (asset.Type == AssetType.Audio)
+                        {
+                            description = generation.Description;
+                            audio = new AudioInfo
+                            {
+                                Codec = asset.Codec,
+                                Duration = asset.Duration,
+                                Length = asset.Length,
+                                Bitrate = asset.Bitrate,
+                                Streams = asset.Streams,
+                                Programs = asset.Programs,
+                            };
+                        }
 
                         artifacts.Add(new()
                         {
@@ -558,6 +575,8 @@ public class AgentServices(ILogger<AgentServices> log,
                             Color = asset.Color,
                             VariantId = variantId,
                             VariantName = variantName,
+                            Description = description,
+                            Audio = audio,
                             CreatedBy = userId,
                             CreatedDate = now,
                             ModifiedBy = userId,

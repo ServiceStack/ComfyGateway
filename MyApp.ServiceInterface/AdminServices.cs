@@ -12,6 +12,121 @@ namespace MyApp.ServiceInterface;
 public class AdminServices(ILogger<AdminServices> log, 
     AppData appData, AppConfig appConfig, AgentEventsManager agentEvents, IDbConnectionFactory dbFactory) : Service
 {
+    public object Post(FixGenerations request)
+    {
+        var take = request.Take ?? 1;
+        
+        var to = new StringsResponse();
+        
+        if (request.Type == "FixArgs")
+        {
+            var rows = Db.SqlList<(string Id, string Args)>(
+                $"""
+                 SELECT "Id", "Args" 
+                   FROM "WorkflowGeneration" 
+                  WHERE "Args" 
+                   LIKE '%"A breathtaking full-body portrait of a woman wearing a dazzling,%'
+                  ORDER BY LENGTH("Args") DESC
+                  LIMIT {take}
+                 """);
+
+            foreach (var row in rows)
+            {
+                var args = (Dictionary<string,object?>) JSON.parse(row.Args);
+                var updatedArgs = new Dictionary<string, object?>();
+                foreach (var entry in args)
+                {
+                    if (entry.Key.Length <= 30)
+                    {
+                        updatedArgs[entry.Key] = entry.Value;
+                    }
+                }
+                if (args.Count != updatedArgs.Count)
+                {
+                    Db.UpdateOnly(() => new WorkflowGeneration {
+                        Args = updatedArgs,
+                    }, where: x => x.Id == row.Id);
+                    to.Results.Add($"Updated {row.Id}");
+                }
+            }
+        }
+        else if (request.Type == "FixAudioMetadata")
+        {
+            var audioAssets = Db.Select(Db.From<Artifact>().Where(x => x.Type == AssetType.Audio).Take(take));
+            var generationIds = audioAssets.Select(x => x.GenerationId).ToSet();
+            var generations = Db.Select(Db.From<WorkflowGeneration>().Where(x => generationIds.Contains(x.Id)));
+                
+            foreach (var audioAsset in audioAssets)
+            {
+                var generation = generations.FirstOrDefault(x => x.Id == audioAsset.GenerationId);
+                if (generation == null) 
+                    throw HttpError.NotFound($"Generation not found: {audioAsset.GenerationId}");
+
+                var asset = generation.Result?.Assets?.Find(x => x.Url == audioAsset.Url);
+                if (asset == null) 
+                    throw HttpError.NotFound($"Asset not found: {audioAsset.Url}");
+                audioAsset.Description = generation.Description;
+                audioAsset.Audio = new AudioInfo
+                {
+                    Codec = asset.Codec,
+                    Duration = asset.Duration,
+                    Length = asset.Length,
+                    Bitrate = asset.Bitrate,
+                    Streams = asset.Streams,
+                    Programs = asset.Programs,
+                };
+                    
+                Db.UpdateOnly(() => new Artifact {
+                    Description = audioAsset.Description,
+                    Audio = audioAsset.Audio,
+                }, where: x => x.Id == audioAsset.Id);
+                to.Results.Add($"Updated {generation.Id}");
+            }
+        }
+
+        return to;
+    }
+
+    public object Post(UpdateAudioTags request)
+    {
+        var artifact = Db.Single(Db.From<Artifact>().Where(x => x.Url == request.ArtifactPath));
+        if (artifact == null)
+            throw HttpError.NotFound("Artifact not found");
+
+        var generation = Db.SingleById<WorkflowGeneration>(artifact.GenerationId);
+        if (generation == null)
+            throw HttpError.NotFound("Generation not found");
+        
+        if (!(request.ArtifactTags?.Count > 0))
+            throw HttpError.BadRequest("No tags provided");
+        
+        var categories = ComfyConverters.GetAudioCategories(request.ArtifactTags);
+        
+        Db.Delete<ArtifactCategory>(x => x.ArtifactId == artifact.Id);
+        Db.Delete<ArtifactTag>(x => x.ArtifactId == artifact.Id);
+        
+        artifact.Tags = request.ArtifactTags;
+        artifact.Categories = categories;
+
+        // Recreate Artifact Categories
+        if (!Db.Exists<ArtifactCategory>(x => x.ArtifactId == artifact.Id))
+        {
+            Db.InsertArtifactCategories(artifact, appData);
+        }
+        // Recreate Artifact Tags
+        if (!Db.Exists<ArtifactTag>(x => x.ArtifactId == artifact.Id))
+        {
+            Db.InsertArtifactTags(artifact, appData);
+        }
+        
+        Db.UpdateOnly(() => new Artifact {
+            Tags = artifact.Tags,
+            Categories = artifact.Categories,
+        }, where: x => x.Id == artifact.Id);
+
+        return new EmptyResponse();
+    }
+    
     public object Delete(HardDeleteWorkflow request)
     {
         var force = request.Force;

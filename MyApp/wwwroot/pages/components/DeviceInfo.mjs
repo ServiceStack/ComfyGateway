@@ -191,7 +191,8 @@ export default {
         <!-- Device Details Dialog -->
         <DeviceManagerDialog v-if="store.canManageDevice(device) && $route.query.device == device.id && $route.query.show" :device="device" :show="$route.query.show"
                              @done="$router.push({ query:omit($route.query,['device','show']) })"/>
-        <DeviceDetailsDialog v-else-if="$route.query.device == device.id" :device="device" />
+        <DeviceDetailsDialog v-else-if="$route.query.device == device.id" :device="device" 
+                             @done="$router.push({ query:omit($route.query,['device','show']) })"/>
       </div>
     `,
     emits: ['deleted'],

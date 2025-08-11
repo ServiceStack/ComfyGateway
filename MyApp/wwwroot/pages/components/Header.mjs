@@ -40,6 +40,11 @@ export default {
                         </RouterLink>
                     </li>
                     <li class="relative flex flex-wrap just-fu-start m-0">
+                        <RouterLink :to="{ path:'/audio' }" class="p-4 flex items-center justify-start mw-full hover:text-sky-500 dark:hover:text-sky-400" :class="$route.path.startsWith('/images') ? 'text-blue-700 dark:text-blue-300' : ''">
+                          Audio
+                        </RouterLink>
+                    </li>
+                    <li class="relative flex flex-wrap just-fu-start m-0">
                         <RouterLink :to="{ path:'/generate' }" class="p-4 flex items-center justify-start mw-full hover:text-sky-500 dark:hover:text-sky-400" :class="$route.path.startsWith('/generate') ? 'text-blue-700 dark:text-blue-300' : ''">
                             Generate
                         </RouterLink>

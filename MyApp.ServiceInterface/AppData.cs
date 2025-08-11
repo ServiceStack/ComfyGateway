@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -404,6 +405,7 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
             CreatedDate = DateTime.UtcNow,
             ModifiedBy = userId,
             ModifiedDate = DateTime.UtcNow,
+            ApiPrompt = parsedWorkflow.ApiPrompt,
         };
         workflowVersion.Id = (int) db.Insert(workflowVersion, selectIdentity: true);
                 
@@ -614,6 +616,19 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
             return ret.FirstOrDefault(x => x.LanguageModels?.Contains(options.LanguageModel) == true);
 
         return ret.FirstOrDefault();
+    }
+    
+    public ComfyAgent GetComfyAgentFor(string deviceId, ClaimsPrincipal user)
+    {
+        if (ComfyAgents.TryGetValue(deviceId, out var agent))
+        {
+            if (!user.IsAdmin() && agent.UserId != user.GetUserId())
+                throw HttpError.Forbidden("Device does not belong to you");
+            
+            return agent;
+        }
+        
+        throw HttpError.NotFound("Device not found");
     }
 
     private long DefaultMemory = 12;
@@ -947,6 +962,15 @@ public class AppData(ILogger<AppData> log, IHostEnvironment env,
         return null;
     }
 
+    public Dictionary<string, NodeInfo> GetSupportedNodeDefinitions(HashSet<string> requiredNodes, HashSet<string> requiredAssets, ComfyAgent? agent)
+    {
+        if (agent != null)
+        {
+            if (AgentCanRunWorkflow(agent, requiredNodes, requiredAssets))
+                return agent.NodeDefs;
+        }
+        return GetSupportedNodeDefinitions(requiredNodes, requiredAssets);
+    }
     public Dictionary<string, NodeInfo> GetSupportedNodeDefinitions(HashSet<string> requiredNodes, HashSet<string> requiredAssets)
     {
         foreach (var agent in ComfyAgents.Values)

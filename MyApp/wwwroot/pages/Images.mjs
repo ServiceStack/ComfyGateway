@@ -622,8 +622,8 @@ export default {
         }
 
         // Menu functions
-        function toggleMenu(event, image) {
-            if (menu.value.show && menu.value.image === image) {
+        function toggleMenu(event, artifact) {
+            if (menu.value.show && menu.value.image === artifact) {
                 closeMenu()
             } else {
                 // Position menu below and to the left of the button
@@ -632,17 +632,17 @@ export default {
                     show: true,
                     x: rect.right - 200, // Position menu to the left of the button
                     y: rect.top + 40, // Position below the button
-                    image: image
+                    artifact,
                 }
             }
         }
-        function showContextMenu(event, image) {
+        function showContextMenu(event, artifact) {
             // Position menu at cursor location for right-click
             menu.value = {
                 show: true,
                 x: event.clientX,
                 y: event.clientY,
-                image: image
+                artifact,
             }
         }
         function closeMenu() {
@@ -707,31 +707,6 @@ export default {
             )
 
             intersectionObserver.value.observe(refBottom.value)
-        }
-
-        // Check for gaps in masonry layout and determine if more content should be loaded
-        function checkForGapsAndLoadMore() {
-            if (!refBottom.value) return false
-
-            const masonryContainer = refBottom.value.parentElement?.querySelector('.columns-1')
-            if (!masonryContainer) return false
-
-            // Get viewport height
-            const viewportHeight = window.innerHeight
-            const bottomRect = refBottom.value.getBoundingClientRect()
-
-            // If bottom element is visible or very close, we definitely need more content
-            if (bottomRect.top < viewportHeight * 1.2) {
-                return true
-            }
-
-            // Additional check: if masonry container is too short, load more to prevent gaps
-            const containerRect = masonryContainer.getBoundingClientRect()
-            if (containerRect.height < viewportHeight * 1.5) {
-                return true
-            }
-
-            return false
         }
 
         // Cleanup intersection observer

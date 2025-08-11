@@ -145,6 +145,7 @@ public class Migration1002 : MigrationBase
         public string? Color { get; set; }
         public string? Caption { get; set; }
         public string? Description { get; set; }
+        public AudioInfo? Audio { get; set; }
         public string? PublishedBy { get; set; }
         [Index]
         public DateTime? PublishedDate { get; set; }
@@ -162,6 +163,7 @@ public class Migration1002 : MigrationBase
     public class Ratings {}
     public class ObjectDetection {}
     public class ApiNode {}
+    public class AudioInfo {}
 
     public override void Up()
     {

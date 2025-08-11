@@ -205,7 +205,7 @@ public class GetDeviceObjectInfo : IGet, IReturn<string>
 
 
 [Tag(Tags.Devices)]
-[ValidateIsAuthenticated]
+// [ValidateIsAuthenticated]
 public class GetDeviceStats : IGet, IReturn<QueryResponse<StatTotal>>
 {
     [ValidateGreaterThan(0)]

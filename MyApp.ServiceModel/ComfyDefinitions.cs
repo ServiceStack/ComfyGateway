@@ -153,7 +153,20 @@ public class ComfyAgentConfig
 
 public class ComfyAgentSettings
 {
-    public bool? PreserveOutputs { get; set; }
+    public bool InDevicePool { get; set; }
+    public bool PreserveOutputs { get; set; }
+    public int MaxBatchSize { get; set; }
+    public int MaxAudioSecs { get; set; }
+    public int MaxVideoSecs { get; set; }
+    
+    public static ComfyAgentSettings CreateDefault() => new()
+    {
+        InDevicePool = false,
+        PreserveOutputs = false,
+        MaxBatchSize = 1,
+        MaxAudioSecs = 300,
+        MaxVideoSecs = 5,
+    };
 }
 
 public class NodeInfo

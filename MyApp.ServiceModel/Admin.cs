@@ -302,3 +302,21 @@ public class ResizeImages : IPost, IReturn<StringsResponse>
     
     public int? Limit { get; set; }
 }
+
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class FixGenerations : IPost, IReturn<StringsResponse>
+{
+    public int? Take { get; set; }
+    public string? Type { get; set; }
+}
+
+[Tag(Tags.Admin)]
+[ValidateIsAdmin]
+public class UpdateAudioTags : IPost, IReturn<StringsResponse>
+{
+    [ValidateNotEmpty]
+    public string ArtifactPath { get; set; }
+    public Dictionary<string, double> ArtifactTags { get; set; }
+}

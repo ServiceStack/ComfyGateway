@@ -12,7 +12,7 @@ export default {
              @click.stop>
 
             <!-- Suggest New Rating with submenu -->
-            <div class="relative group">
+            <div v-if="isType(['Image','Video'])" class="relative group">
                 <button @click="toggleRatingSubmenu"
                         class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between">
                     <div class="flex items-center">
@@ -30,14 +30,14 @@ export default {
                 <div v-if="showRatingSubmenu"
                      class="absolute left-full top-0 ml-1 w-32 rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700/50">
                     <button v-for="rating in availableRatings" :key="rating"
-                            @click="handleAction('rating', menu.image, { rating })"
+                            @click="handleAction('rating', menu.artifact, { rating })"
                             :class="[
                                 'w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center',
-                                menu.image?.rating === rating
+                                menu.artifact?.rating === rating
                                     ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
                                     : 'text-gray-700 dark:text-gray-200'
                             ]">
-                        <svg v-if="menu.image?.rating === rating" class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg v-if="menu.artifact?.rating === rating" class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M20 6L9 17l-5-5"/>
                         </svg>
                         <span v-else class="size-4 mr-2"></span>
@@ -46,63 +46,63 @@ export default {
                 </div>
             </div>
 
-            <button @click="handleAction('download', menu.image)" type="button"
+            <button @click="handleAction('download', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                 <svg class="size-5 mr-2 -ml-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="m12 16l-5-5l1.4-1.45l2.6 2.6V4h2v8.15l2.6-2.6L17 11zm-6 4q-.825 0-1.412-.587T4 18v-3h2v3h12v-3h2v3q0 .825-.587 1.413T18 20z"/></svg>
-                Download Image
+                Download {{menu.artifact.type}}
             </button>
-            <button @click="handleAction('copyPrompt', menu.image)" type="button"
+            <button @click="handleAction('copyPrompt', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                 <svg class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M16 3H4v13"/><path d="M8 7h12v12a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2z"/></g></svg>
                 Copy Prompt
             </button>
-            <button @click="handleAction('hide', menu.image)" type="button"
+            <button v-if="isType(['Image','Video'])" @click="handleAction('hide', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                 <svg class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/>
                 </svg>
                 Hide Image
             </button>
-            <button @click="handleAction('report', menu.image)" type="button"
+            <button @click="handleAction('report', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                 <svg class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9s10.3-3.9 14.2 0 3.9 10.3 0 14.2-10.3 3.9-14.2 0zM12 8v4M12 16h.01"/>
                 </svg>
-                Report Image
+                Report {{menu.artifact.type}}
             </button>
-            <button v-if="store.isAdmin" @click="handleAction('delete', menu.image)" type="button"
+            <button v-if="store.isAdmin" @click="handleAction('delete', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                     <!-- delete icon -->
                     <svg class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 11v6m-4-6v6M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7M4 7h16M7 7l2-4h6l2 4"/></svg>
-                Delete Image <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">#{{menu.image.id}}</span>
+                Delete {{menu.artifact.type}} <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">#{{menu.artifact.id}}</span>
             </button>
-            <button v-if="store.isAdmin" @click="handleAction('regenerate', menu.image)" type="button" :disabled="isRegenerating(menu.image)"
+            <button v-if="store.isAdmin" @click="handleAction('regenerate', menu.artifact)" type="button" :disabled="isRegenerating(menu.artifact)"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                     <!-- regenerate icon -->
-                    <svg class="size-4 mr-2" :class="{ 'animate-spin': isRegenerating(menu.image) }" xmlns="http://www.w3.org/2000/svg" viewBox="-1 -2 24 24"><path fill="currentColor" d="m19.347 7.24l.847-1.266a.984.984 0 0 1 1.375-.259c.456.31.58.93.277 1.383L19.65 10.38a.984.984 0 0 1-1.375.259L14.97 8.393a1 1 0 0 1-.277-1.382a.984.984 0 0 1 1.375-.26l1.344.915C16.428 4.386 13.42 2 9.863 2c-4.357 0-7.89 3.582-7.89 8s3.533 8 7.89 8c.545 0 .987.448.987 1s-.442 1-.987 1C4.416 20 0 15.523 0 10S4.416 0 9.863 0c4.504 0 8.302 3.06 9.484 7.24"/></svg>
-                {{ isRegenerating(menu.image) ? 'Regenerating...' : 'Regenerate Image' }}
+                    <svg class="size-4 mr-2" :class="{ 'animate-spin': isRegenerating(menu.artifact) }" xmlns="http://www.w3.org/2000/svg" viewBox="-1 -2 24 24"><path fill="currentColor" d="m19.347 7.24l.847-1.266a.984.984 0 0 1 1.375-.259c.456.31.58.93.277 1.383L19.65 10.38a.984.984 0 0 1-1.375.259L14.97 8.393a1 1 0 0 1-.277-1.382a.984.984 0 0 1 1.375-.26l1.344.915C16.428 4.386 13.42 2 9.863 2c-4.357 0-7.89 3.582-7.89 8s3.533 8 7.89 8c.545 0 .987.448.987 1s-.442 1-.987 1C4.416 20 0 15.523 0 10S4.416 0 9.863 0c4.504 0 8.302 3.06 9.484 7.24"/></svg>
+                {{ isRegenerating(menu.artifact) ? 'Regenerating...' : 'Regenerate ' + menu.artifact.type }}
             </button>
-            <button v-if="store.isAdmin && store.workflows.find(x => x.version.id === menu.image.versionId)" @click="handleAction('pinWorkflowPoster', menu.image)" type="button"
+            <button v-if="store.isAdmin && isType(['Image','Video']) && store.workflows.find(x => x.version.id === menu.artifact.versionId)" @click="handleAction('pinWorkflowPoster', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                     <!-- pin icon -->
                     <svg class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m10.25 10.25l4 4m-12.5-7.5l5-5s1 2 2 3s4.5 2 4.5 2l-6.5 6.5s-1-3.5-2-4.5s-3-2-3-2"/></svg>
-                <span class="whitespace-nowrap overflow-hidden text-ellipsis" :title="store.workflows.find(x => x.version.id === menu.image.versionId)?.name">
-                    Pin to {{store.workflows.find(x => x.version.id === menu.image.versionId)?.name}}
+                <span class="whitespace-nowrap overflow-hidden text-ellipsis" :title="store.workflows.find(x => x.version.id === menu.artifact.versionId)?.name">
+                    Pin to {{store.workflows.find(x => x.version.id === menu.artifact.versionId)?.name}}
                 </span>
             </button>
-            <button v-if="store.isAdmin && menu.image.height > menu.image.width && !store.isArtifactFeatured(menu.image)" @click="handleAction('featureArtifact', menu.image)" type="button"
+            <button v-if="store.isAdmin && isType(['Image','Video']) && menu.artifact.height > menu.artifact.width && !store.isArtifactFeatured(menu.artifact)" @click="handleAction('featureArtifact', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                     <!-- feature icon -->
                     <svg class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="m8.58 17.25l.92-3.89l-3-2.58l3.95-.37L12 6.8l1.55 3.65l3.95.33l-3 2.58l.92 3.89L12 15.19zM12 2a10 10 0 0 1 10 10a10 10 0 0 1-10 10A10 10 0 0 1 2 12A10 10 0 0 1 12 2m0 2a8 8 0 0 0-8 8a8 8 0 0 0 8 8a8 8 0 0 0 8-8a8 8 0 0 0-8-8"/></svg>
-                <span class="whitespace-nowrap overflow-hidden text-ellipsis" :title="store.workflows.find(x => x.version.id === menu.image.versionId)?.name">
+                <span class="whitespace-nowrap overflow-hidden text-ellipsis" :title="store.workflows.find(x => x.version.id === menu.artifact.versionId)?.name">
                     Feature Portrait
                 </span>
             </button>
-            <button v-if="store.isAdmin && menu.image.height > menu.image.width && !store.isArtifactUnFeatured(menu.image)" @click="handleAction('unFeatureArtifact', menu.image)" type="button"
+            <button v-if="store.isAdmin && isType(['Image','Video']) && menu.artifact.height > menu.artifact.width && !store.isArtifactUnFeatured(menu.artifact)" @click="handleAction('unFeatureArtifact', menu.artifact)" type="button"
                     class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
                     <!-- un feature icon -->
                     <svg class="size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="currentColor" d="M16 2C8.2 2 2 8.2 2 16s6.2 14 14 14s14-6.2 14-14S23.8 2 16 2m0 26C9.4 28 4 22.6 4 16S9.4 4 16 4s12 5.4 12 12s-5.4 12-12 12"/><path fill="currentColor" d="M21.4 23L16 17.6L10.6 23L9 21.4l5.4-5.4L9 10.6L10.6 9l5.4 5.4L21.4 9l1.6 1.6l-5.4 5.4l5.4 5.4z"/></svg>
-                <span class="whitespace-nowrap overflow-hidden text-ellipsis" :title="store.workflows.find(x => x.version.id === menu.image.versionId)?.name">
+                <span class="whitespace-nowrap overflow-hidden text-ellipsis" :title="store.workflows.find(x => x.version.id === menu.artifact.versionId)?.name">
                     Un Feature Portrait
                 </span>
             </button>
@@ -143,6 +143,14 @@ export default {
             message: '',
             timeoutId: null
         })
+        
+        function isType(type) {
+            return typeof type === 'string' 
+                ? props.menu.artifact.type === type
+                : Array.isArray(type)
+                    ? type.includes(props.menu.artifact.type)
+                    : false
+        }
 
         function isRegenerating(image) {
             return regeneratingIdMap.value[image.generationId] && new Date(regeneratingIdMap.value[image.generationId]) >= new Date(image.modifiedDate)
@@ -317,6 +325,7 @@ export default {
             toastError,
             showRatingSubmenu,
             availableRatings,
+            isType,
             isRegenerating,
             formatRating,
             handleAction,

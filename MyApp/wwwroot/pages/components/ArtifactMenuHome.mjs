@@ -35,12 +35,12 @@ export default {
         onMounted(async () => {
             sub = events.subscribe('showArtifactMenu', ({ event, artifactId }) => {
                 console.log('showArtifactMenu', event, artifactId)
-                store.findArtifact(artifactId).then(image => {
+                store.findArtifact(artifactId).then(artifact => {
                     menu.value = {
                         show: true,
                         x: event.clientX,
                         y: event.clientY,
-                        image,
+                        artifact,
                     }
                 })
             })

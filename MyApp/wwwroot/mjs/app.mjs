@@ -1,10 +1,26 @@
 import { createApp, reactive, ref, computed, nextTick, defineAsyncComponent } from "vue"
-import { JsonServiceClient, EventBus, $1, $$, lastLeftPart } from "@servicestack/client"
-import ServiceStackVue, { useAuth } from "@servicestack/vue"
+import {
+    JsonServiceClient,
+    EventBus,
+    $1,
+    $$,
+    lastLeftPart,
+    omit,
+    lastRightPart,
+    leftPart,
+    rightPart
+} from "@servicestack/client"
+import ServiceStackVue, { useAuth, useConfig } from "@servicestack/vue"
 import Header from "../pages/components/Header.mjs"
 import store from "../pages/lib/store.mjs"
 import { humanifyNumber, pluralize } from "../pages/lib/utils.mjs"
 import { createWebHistory, createRouter } from "vue-router"
+
+const { setConfig }  = useConfig()
+setConfig({
+    filterInputClass: (cls, type) => cls
+        .replaceAll('bg-gray-900', 'bg-gray-800')
+})
 
 const routes = [
     { path: '/', component: () => import('../pages/Home.mjs') },
@@ -12,6 +28,7 @@ const routes = [
     { path: '/images/:path?', component: () => import('../pages/Images.mjs') },
     { path: '/gallery/:path?', component: () => import('../pages/Images.mjs') },
     { path: '/generations/:id?', component: () => import('../pages/Generation.mjs') },
+    { path: '/audio/:path?', component: () => import('../pages/Audio.mjs') },
     { path: '/test/:path?', component: () => import('../pages/Test.mjs') },
 ]
 const router = createRouter({
@@ -20,7 +37,11 @@ const router = createRouter({
 })
 
 const globalFunctions = {
+    omit,
+    leftPart,
+    rightPart,
     lastLeftPart,
+    lastRightPart,
     pluralize,
     humanifyNumber,
 }

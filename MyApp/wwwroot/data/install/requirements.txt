@@ -2,4 +2,6 @@ servicestack
 onnxruntime
 ultralytics
 supervision
+mediapipe
+pydub
 git+https://github.com/openai/CLIP.git

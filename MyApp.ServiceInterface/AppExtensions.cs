@@ -55,11 +55,11 @@ public static partial class AppExtensions
     
     public static Dictionary<string,object?> ParseAsObjectDictionary(this string json) => 
         (Dictionary<string,object?>)JSON.parse(json);
-    public static int? GetUserId(this IRequest? req)
+    public static string? GetUserId(this IRequest? req)
     {
         var user = req.GetClaimsPrincipal();
         return user.IsAuthenticated()
-            ? user.GetUserId().ToInt()
+            ? user.GetUserId()
             : null;
     }
 
@@ -87,8 +87,8 @@ public static partial class AppExtensions
     public static AssetType ToAssetType(this string ext) => ext switch
     {
         "jpg" or "jpeg" or "png" or "webp" or "gif" or "bmp" or "tiff" => AssetType.Image,
-        "mp4" or "mov" or "webm" or "mkv" or "avi" or "wmv" or "ogg" => AssetType.Video,
-        "mp3" or "aac" or "flac" or "wav" or "wma" => AssetType.Audio,
+        "mp4" or "mov" or "webm" or "mkv" or "avi" or "wmv"  => AssetType.Video,
+        "mp3" or "aac" or "flac" or "wav" or "wma" or "m4a" or "opus" or "ogg" => AssetType.Audio,
         "txt" or "md" or "json" => AssetType.Text,
         _ => AssetType.Binary,
     };
@@ -205,4 +205,15 @@ public static partial class AppExtensions
         Description = artifact.Description,
     };
 
+    public static void AssertValidArgs(this Dictionary<string, object?>? Args)
+    {
+        if (Args?.Count > 0)
+        {
+            foreach (var entry in Args)
+            {
+                if (entry.Key.Length > 30)
+                    throw HttpError.BadRequest("Invalid Workflow Args");
+            }
+        }
+    }
 }

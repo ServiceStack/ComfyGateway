@@ -44,8 +44,35 @@ public class ComfyServices(ILogger<ComfyServices> log,
         return ret;
     }
 
+    public object Patch(UpdateComfyAgentSettings request)
+    {
+        var now = DateTime.UtcNow;
+
+        var agent = appData.GetComfyAgentFor(request.DeviceId, Request.GetClaimsPrincipal());
+        agent.Settings.PreserveOutputs = request.PreserveOutputs ?? agent.Settings.PreserveOutputs;
+        agent.Settings.MaxBatchSize = request.MaxBatchSize ?? agent.Settings.MaxBatchSize;
+        agent.Settings.InDevicePool = request.InDevicePool ?? agent.Settings.InDevicePool;
+        agent.DevicePool = agent.Settings.InDevicePool == true 
+            ? agent.DevicePool ?? now
+            : null;
+        
+        Db.UpdateOnly(() => new ComfyAgent
+        {
+            Settings = agent.Settings,
+            DevicePool = agent.DevicePool,
+            ModifiedDate = now,
+        }, where: x => x.DeviceId == request.DeviceId);
+        
+        return new UpdateComfyAgentSettingsResponse {
+            Result = agent.ConvertTo<OwnerAgentInfo>()
+        };
+    }
+
     public async Task<object> Get(DevicePool request)
     {
+        var userId = Request.GetUserId();
+        var isAdmin = Request.GetClaimsPrincipal().IsAdmin();
+        
         var visibleAgents = appData.GetVisibleComfyAgents()
             .Where(x => x.DevicePool != null)
             .ToList();
@@ -67,7 +94,9 @@ public class ComfyServices(ILogger<ComfyServices> log,
         return new QueryResponse<AgentInfo>
         {
             Total = visibleAgents.Count,
-            Results = visibleAgents.Map(x => x.ConvertTo<AgentInfo>()),
+            Results = visibleAgents.Select(x => x.UserId == userId || isAdmin 
+                ? x.ConvertTo<OwnerAgentInfo>() as AgentInfo
+                : x.ConvertTo<AgentInfo>()).ToList(),
         };
     }
     
@@ -351,7 +380,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
             }
             
             var workflowVersion = GetWorkflowVersion(Db, gen.WorkflowId, gen.VersionId);
-            var (apiPrompt, newWorkflow, _) = await comfyConverter.CreateApiPromptAsync(workflowVersion, gen.Args, gen.Id);
+            var (apiPrompt, newWorkflow, _) = await comfyConverter.CreateApiPromptAsync(workflowVersion, gen.Args, agent:null, gen.Id);
 
             gen.Workflow = newWorkflow;
             gen.ApiPrompt = apiPrompt;
@@ -416,17 +445,23 @@ public class ComfyServices(ILogger<ComfyServices> log,
         var userId = Request.GetClaimsPrincipal().GetUserId();
         log.LogInformation("Received QueueComfyWorkflow from '{UserId}' to execute workflow '{Workflow}'",
             userId, request.WorkflowId);
-                
+
+        request.Args.AssertValidArgs();
+        
         var clientId = Guid.NewGuid().ToString("N");
         var workflowVersion = GetWorkflowVersion(db, request.WorkflowId, request.VersionId);
-        var (apiPrompt, workflow, _) = await comfyConverter.CreateApiPromptAsync(workflowVersion, request.Args!, clientId);
-
-        log.LogInformation("Queueing ComfyUI Workflow for {ClientId}: {ApiPromptJson}", 
-            apiPrompt.ClientId, ClientConfig.ToSystemJson(apiPrompt.Prompt));
 
         var requiredNodes = ComfyWorkflowParser.ExtractRequiredNodeTypes(workflowVersion.Workflow, appData.DefaultGatewayNodes, log);
         var requiredAssets = ComfyWorkflowParser.ExtractAssetPaths(workflowVersion.Workflow, log);
         
+        var agent = request.DeviceId != null
+            ? appData.GetComfyAgent(new(DeviceId:request.DeviceId))
+            : appData.GetSupportedAgent(requiredNodes, requiredAssets);
+        var (apiPrompt, workflow, _) = await comfyConverter.CreateApiPromptAsync(workflowVersion, request.Args!, agent, clientId);
+
+        log.LogInformation("Queueing ComfyUI Workflow for {ClientId}: {ApiPromptJson}", 
+            apiPrompt.ClientId, ClientConfig.ToSystemJson(apiPrompt.Prompt));
+
         var checkpoint = requiredAssets.FirstOrDefault(x => 
             x.StartsWith("checkpoints/") || x.StartsWith("diffusion_models/") || x.StartsWith("unet/") || 
             x.StartsWith("Stable-diffusion/", StringComparison.OrdinalIgnoreCase));
@@ -923,7 +958,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
         var clientId = version.Workflow.TryGetValue("Id", out var oId) && oId is string id
             ? id
             : Guid.NewGuid().ToString("N");
-        var (apiPrompt, _, promptJson) = await nodeConverter.CreateApiPromptAsync(version, new(), clientId);
+        var (apiPrompt, _, promptJson) = await nodeConverter.CreateApiPromptAsync(version, new(), agent:null, clientId);
         version.ApiPrompt = apiPrompt.Prompt;
         
         var updated = await db.UpdateOnlyAsync(() => new WorkflowVersion {
@@ -992,7 +1027,7 @@ public class ComfyServices(ILogger<ComfyServices> log,
                     ? id
                     : Guid.NewGuid().ToString("N");
 
-                var (apiPrompt, _, promptJson) = await nodeConverter.CreateApiPromptAsync(version, new(), clientId);
+                var (apiPrompt, _, promptJson) = await nodeConverter.CreateApiPromptAsync(version, new(), agent:null, clientId);
                 version.ApiPrompt = apiPrompt.Prompt;
                 
                 await db.UpdateOnlyAsync(() => new WorkflowVersion {
@@ -1061,10 +1096,10 @@ public class ComfyServices(ILogger<ComfyServices> log,
             name.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
             throw HttpError.BadRequest("Invalid Name");
 
-        var version = "v1";
+        var versionName = "v1";
         if (name.IndexOf('.') >= 0)
         {
-            version = name.LastRightPart('.');
+            versionName = name.LastRightPart('.');
             name = name.LastLeftPart('.');
         }
         
@@ -1074,11 +1109,31 @@ public class ComfyServices(ILogger<ComfyServices> log,
         var workflowJson = await Request.Files[0].InputStream.ReadToEndAsync();
 
         var baseModel = request.BaseModel.ToJsv(); // Use EnumMember Value if exists
-        var parsedWorkflow = appData.ParseWorkflow(workflowJson, name, baseModel, version);
+        var parsedWorkflow = appData.ParseWorkflow(workflowJson, name, baseModel, versionName);
         var saveToFullPath = appData.WorkflowsPath.CombineWith(parsedWorkflow.Path);
         Path.GetDirectoryName(saveToFullPath).AssertDir();
         await File.WriteAllTextAsync(saveToFullPath, workflowJson);
 
+        var version = new WorkflowVersion
+        {
+            Name = parsedWorkflow.Name,
+            Version = parsedWorkflow.Version,
+            Path = parsedWorkflow.Path,
+            Workflow = parsedWorkflow.Workflow,
+            Info = parsedWorkflow.Info,
+            Nodes = parsedWorkflow.Nodes,
+            Assets = parsedWorkflow.Assets,
+            CreatedBy = userId,
+            CreatedDate = now,
+            ModifiedBy = userId,
+            ModifiedDate = now,
+        };
+        var clientId = parsedWorkflow.Workflow.TryGetValue("Id", out var oId) && oId is string id
+            ? id
+            : Guid.NewGuid().ToString("N");
+        var (apiPrompt, _, promptJson) = await nodeConverter.CreateApiPromptAsync(version, new(), agent:null, clientId);
+        parsedWorkflow.ApiPrompt = apiPrompt.Prompt; 
+        
         var (workflow, workflowVersion) = AppData.CreateWorkflowAndVersion(Db, parsedWorkflow, userId);
 
         return new UploadNewWorkflowResponse

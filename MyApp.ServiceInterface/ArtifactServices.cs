@@ -14,6 +14,28 @@ public class ArtifactServices(
     AppData appData, 
     AgentEventsManager agentManager) : Service
 {
+    public async Task<object> Get(GetPopularCategories request)
+    {
+        var type = request.Type;
+        var q = Db.From<ArtifactCategory>(Db.TableAlias("ac"))
+            .Join<Artifact>((ac, a) => ac.ArtifactId == a.Id && a.Type == type)
+            .Join<Category>((ac, c) => ac.CategoryId == c.Id)
+            .GroupBy<ArtifactCategory,Category>((ac, c) => new { ac.CategoryId, c.Name })
+            .OrderByDescending(ac => Sql.Count(ac.ArtifactId))
+            .Take(request.Take)
+            .Select<ArtifactCategory,Category>((ac,c) => new {
+                ac.CategoryId,
+                c.Name,
+                Count = Sql.Count(ac.ArtifactId),
+            });
+        
+        var results = await Db.SelectAsync<CategoryStat>(q);
+        return new GetPopularCategoriesResponse
+        {
+            Results = results
+        };
+    }
+
     public async Task<object> Get(QueryArtifacts request)
     {
         if (request.Id > 0)
@@ -25,6 +47,9 @@ public class ArtifactServices(
         }
         
         var q = Db.From<Artifact>(Db.TableAlias("a"));
+        var type = request.Type ?? AssetType.Image;
+        q.Where(x => x.Type == type);
+        
         if (request.Category != null)
         {
             var category = appData.GetCategory(request.Category);
@@ -192,8 +217,21 @@ public class ArtifactServices(
                 Db.InsertArtifactTags(artifact, appData);
             }
 
-            agentManager.AddCaptionArtifactTask(dbTasks, artifact, userId);
-            agentManager.AddDescribeArtifactTask(dbTasks, artifact, userId);
+            if (artifact.Type == AssetType.Image)
+            {
+                agentManager.AddCaptionArtifactTask(dbTasks, artifact, userId);
+                agentManager.AddDescribeArtifactTask(dbTasks, artifact, userId);
+            }
+
+            if (artifact.Type == AssetType.Audio)
+            {
+                Db.UpdateOnly(() => new Artifact {
+                    PublishedBy = userId,
+                    PublishedDate = now,
+                    ModifiedBy = userId,
+                    ModifiedDate = now,
+                }, where:x => x.GenerationId == request.Id && x.Id == artifact.Id);
+            }
         }
         
         return new EmptyResponse();

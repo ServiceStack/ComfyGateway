@@ -6,6 +6,24 @@ using ServiceStack.DataAnnotations;
 namespace MyApp.ServiceModel;
 
 [Tag(Tags.Artifacts)]
+public class GetPopularCategories : IGet, IReturn<GetPopularCategoriesResponse>
+{
+    public AssetType Type { get; set; }
+    public int? Take { get; set; }
+}
+public class GetPopularCategoriesResponse
+{
+    public List<CategoryStat> Results { get; set; } = [];
+    public ResponseStatus? ResponseStatus { get; set; }
+}
+public class CategoryStat
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int Count { get; set; }
+}
+
+[Tag(Tags.Artifacts)]
 public class QueryArtifacts : QueryDb<Artifact>
 {
     public int? Id { get; set; }
@@ -16,6 +34,7 @@ public class QueryArtifacts : QueryDb<Artifact>
     public string? Tag { get; set; }
     public int? VersionId { get; set; }
     public int? Similar { get; set; }
+    public AssetType? Type { get; set; }
     public string? UserId { get; set; }
 }
 
